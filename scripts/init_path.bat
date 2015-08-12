@@ -1,0 +1,1 @@
+set PATH=%PATH%;P:\git\nexus-tools2_build\bin\release;P:\git\seqan_build\debug-vs15\bin\Release
