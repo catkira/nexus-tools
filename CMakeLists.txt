@@ -26,9 +26,27 @@ seqan_setup_library ()
 include (package)
 include (SeqAnCtdSetup)
 
+# Search SeqAn and select dependencies.
+set (SEQAN_FIND_DEPENDENCIES NONE)
+find_package (SeqAn REQUIRED)
+
 # ----------------------------------------------------------------------------
-# Load Lambda
+# Build Setup
 # ----------------------------------------------------------------------------
+
+# Add include directories.
+include_directories (${SEQAN_INCLUDE_DIRS})
+
+# Add definitions set by find_package (SeqAn).
+add_definitions (${SEQAN_DEFINITIONS})
+
+# Add definitions set by the build system.
+add_definitions (-DSEQAN_APP_VERSION="${SEQAN_APP_VERSION}")
+add_definitions (-DSEQAN_REVISION="${SEQAN_REVISION}")
+add_definitions (-DSEQAN_DATE="${SEQAN_DATE}")
+
+# Add CXX flags found by find_package (SeqAn).
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS}")
 
 add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
