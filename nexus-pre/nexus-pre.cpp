@@ -16,23 +16,25 @@ struct Statistics
 
 };
 
-void printStatistics(const Statistics &stats)
+void printStatistics(const Statistics &stats, const bool clusterFiltering)
 {
     std::cout << "Total reads                          : " << stats.totalReads << std::endl;
     std::cout << "Total mapped reads                   : " << stats.totalMappedReads << std::endl;
     std::cout << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
     std::cout << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" <<std::endl;
-    std::cout << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    if (clusterFiltering)
+        std::cout << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
 }
 
 // Todo: remove bad copypaste code
-void printStatistics(std::fstream &fs, const Statistics &stats)
+void printStatistics(std::fstream &fs, const Statistics &stats, const bool clusterFiltering)
 {
     fs << "Total reads                          : " << stats.totalReads << std::endl;
     fs << "Total mapped reads                   : " << stats.totalMappedReads << std::endl;
     fs << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
     fs << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
-    fs << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    if (clusterFiltering)
+        fs << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
 }
 
 seqan::ArgumentParser buildParser(void)
@@ -65,8 +67,41 @@ seqan::ArgumentParser buildParser(void)
     setDefaultValue(recordFilterCluster, 0);
     setMinValue(recordFilterCluster, "0");
     addOption(parser, recordFilterCluster);
-    
+
+    seqan::ArgParseOption recordWriteBam = seqan::ArgParseOption(
+        "b", "BAM file", "Create a BAM + BAI file",
+        seqan::ArgParseArgument::INPUT_FILE, "BAM/BAI filename");
+    addOption(parser, recordWriteBam);
+
+    seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
+        "r", "records", "Number of records to be read in one run.",
+        seqan::ArgParseOption::INTEGER, "VALUE");
+    setDefaultValue(recordOpt, 10000);
+    setMinValue(recordOpt, "10");
+    addOption(parser, recordOpt);
+
     return parser;
+}
+
+std::string getFilePath(const std::string& fileName)
+{
+    std::size_t found = fileName.find_last_of("/\\");
+    if (found == std::string::npos || found < 1)
+        return std::string();
+    return fileName.substr(0, found);
+}
+
+std::string getFilePrefix(const std::string& fileName, const bool withPath = true)
+{
+    std::size_t found = fileName.find_last_of(".");
+    std::size_t found2 = std::string::npos;
+    if (!withPath)
+        found2 = fileName.find_last_of("/\\");
+    if (found == std::string::npos)
+        return std::string();
+    if (found2 == std::string::npos)
+        return fileName.substr(0, found);
+    return fileName.substr(found2 + 1, found - found2);
 }
 
 int main(int argc, char const * argv[])
@@ -86,6 +121,10 @@ int main(int argc, char const * argv[])
         return 1;
     }
 
+    unsigned records;
+    getOptionValue(records, parser, "r");
+
+
     seqan::CharString fileName1, fileName2;
     getArgumentValue(fileName1, parser, 0, 0);
 
@@ -102,7 +141,7 @@ int main(int argc, char const * argv[])
         outFilename = seqan::toCString(fileName2);
     }
     else
-        outFilename = std::string(argv[1]) + std::string("_filtered.sam");
+        outFilename = getFilePrefix(argv[1]) + std::string("_filtered.sam");
     if (!open(bamFileOut, outFilename.c_str()))
     {
         std::cerr << "ERROR: Could not open " << outFilename << " for writing.\n";
@@ -138,8 +177,10 @@ int main(int argc, char const * argv[])
             if (posEnd == std::string::npos)
                 posEnd = idString.length();
             std::string const barcode = idString.substr(posStart, posEnd - posStart);
-            // pos = chromosome + position
-            std::string const pos = std::to_string(record.rID) + ":" + std::to_string(record.beginPos);
+            // pos = chromosome + strand + position
+            std::string const strand = record.flag == 0x00 ? "+" : "-";
+            const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
+            std::string const pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos+offset);
             std::string const key = barcode + ":" + pos;
             if (keySet.find(key) != keySet.end())
             {
@@ -157,18 +198,19 @@ int main(int argc, char const * argv[])
             ++occurenceMap[pos];
         }
     }
-
-    
+    close(bamFileIn);
+    close(bamFileOut);
 
     if (seqan::isSet(parser, "f"))
     {
+        BamFileIn bamFileIn2(seqan::toCString(outFilename));
         unsigned clusterSize = 0;
         getOptionValue(clusterSize, parser, "f");
         std::cout << "filtering reads..." << std::endl;
         // Open output file, BamFileOut accepts also an ostream and a format tag.
-        setPosition(bamFileIn, 0);
-        BamFileOut bamFileOut2(bamFileIn);
-        std::string outFilename2 = std::string(argv[1]) + std::string("_filtered2.sam");
+        setPosition(bamFileIn2, 0);
+        BamFileOut bamFileOut2(bamFileIn2);
+        const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2.sam");
         if (!open(bamFileOut2, outFilename2.c_str()))
         {
             std::cerr << "ERROR: Could not open " << outFilename2 << " for writing.\n";
@@ -176,11 +218,11 @@ int main(int argc, char const * argv[])
         }
         // Copy header.
         BamHeader header;
-        readHeader(header, bamFileIn);
+        readHeader(header, bamFileIn2);
         writeHeader(bamFileOut2, header);
-        while (!atEnd(bamFileIn))
+        while (!atEnd(bamFileIn2))
         {
-            readRecord(record, bamFileIn);
+            readRecord(record, bamFileIn2);
             if (record.flag != 0x00 && record.flag != 0x10)
                 continue;
 
@@ -192,9 +234,10 @@ int main(int argc, char const * argv[])
             if (posEnd == std::string::npos)
                 posEnd = idString.length();
             std::string const barcode = idString.substr(posStart, posEnd - posStart);
-            // pos = chromosome + position
-            std::string const pos = std::to_string(record.rID) + ":" + std::to_string(record.beginPos);
-            //std::string const key = barcode + ":" + pos;
+            // pos = chromosome + strand + position
+            std::string const strand = record.flag == 0x00 ? "+" : "-";
+            const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
+            std::string const pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos + offset);
             const auto& it = occurenceMapUnique.find(pos);
             if (it != occurenceMapUnique.end() && it->second >= clusterSize)
             {
@@ -202,9 +245,10 @@ int main(int argc, char const * argv[])
                 ++stats.readsAfterFiltering;
             }
         }
+        close(bamFileOut2);
     }
     std::fstream fs;
-    fs.open("P:\\statistics.txt", std::fstream::out, _SH_DENYNO);
+    fs.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
 
     // occurenceMap = number of mappings for each location in genome
     // duplicationRate[x] = number of locations with x mappings
@@ -237,9 +281,9 @@ int main(int argc, char const * argv[])
         fs << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << " " 
             << duplicationRateUnique[i]*(i+1) << " " << duplicationRate[i]*(i+1) <<std::endl;
     }
-    printStatistics(stats);
-    printStatistics(fs, stats);
+    printStatistics(stats, seqan::isSet(parser, "f"));
+    printStatistics(fs, stats, seqan::isSet(parser, "f"));
 
-    fs.close();
+   
 	return 0;
 }
