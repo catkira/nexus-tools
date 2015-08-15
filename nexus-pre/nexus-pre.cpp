@@ -1,7 +1,12 @@
+#define SEQAN_PROFILE
+
 #include <seqan/bam_io.h>
 #include <seqan/seq_io.h>
 #include <seqan/arg_parse.h>
+#include <seqan/basic.h>
 #include <string>
+#include <unordered_set>
+#include <unordered_map>
 
 using namespace seqan;
 
@@ -104,6 +109,34 @@ std::string getFilePrefix(const std::string& fileName, const bool withPath = tru
     return fileName.substr(found2 + 1, found - found2);
 }
 
+void getPos(const BamAlignmentRecord &record, std::string &pos)
+{
+    const std::string idString = toCString(record.qName);
+    // pos = chromosome + strand + position
+    std::string const strand = record.flag == 0x00 ? "+" : "-";
+    const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
+    pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos + offset);
+    return;
+}
+
+bool getKey(const BamAlignmentRecord &record, std::string &key, std::string &pos)
+{
+    const std::string idString = toCString(record.qName);
+    size_t const posStart = idString.find("TL:") + 3;
+    if (posStart == std::string::npos)
+        return false;
+    size_t posEnd = idString.find(':', posStart);
+    if (posEnd == std::string::npos)
+        posEnd = idString.length();
+    std::string const barcode = idString.substr(posStart, posEnd - posStart);
+    // pos = chromosome + strand + position
+    std::string const strand = record.flag == 0x00 ? "+" : "-";
+    const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
+    pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos + offset);
+    key = barcode + ":" + pos;
+    return true;
+}
+
 int main(int argc, char const * argv[])
 {
     // Additional checks
@@ -141,7 +174,7 @@ int main(int argc, char const * argv[])
         outFilename = seqan::toCString(fileName2);
     }
     else
-        outFilename = getFilePrefix(argv[1]) + std::string("_filtered.sam");
+        outFilename = getFilePrefix(argv[1]) + std::string("_filtered.bam");
     if (!open(bamFileOut, outFilename.c_str()))
     {
         std::cerr << "ERROR: Could not open " << outFilename << " for writing.\n";
@@ -157,11 +190,13 @@ int main(int argc, char const * argv[])
     // Copy records.
     std::set<std::string> keySet;
     std::map<std::string, unsigned> occurenceMapUnique;
-    std::map<std::string, unsigned> occurenceMap;
+    std::unordered_map<std::string, unsigned> occurenceMap;
 
     Statistics stats;
 
-    std::cout << "sorting reads..." << std::endl;
+    std::cout << "sorting reads... ";
+    SEQAN_PROTIMESTART(loopTime);
+
     while (!atEnd(bamFileIn))
     {
         readRecord(record, bamFileIn);
@@ -169,19 +204,9 @@ int main(int argc, char const * argv[])
         if (record.flag == 0x00 || record.flag == 0x10)
         {
             ++stats.totalMappedReads;
-            std::string idString = toCString(record.qName);
-            size_t const posStart = idString.find("TL:") + 3;
-            if (posStart == std::string::npos)
+            std::string key, pos;
+            if(!getKey(record, key, pos))
                 continue;
-            size_t posEnd = idString.find(':', posStart);
-            if (posEnd == std::string::npos)
-                posEnd = idString.length();
-            std::string const barcode = idString.substr(posStart, posEnd - posStart);
-            // pos = chromosome + strand + position
-            std::string const strand = record.flag == 0x00 ? "+" : "-";
-            const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
-            std::string const pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos+offset);
-            std::string const key = barcode + ":" + pos;
             if (keySet.find(key) != keySet.end())
             {
                 ++stats.removedReads;
@@ -200,13 +225,16 @@ int main(int argc, char const * argv[])
     }
     close(bamFileIn);
     close(bamFileOut);
+    double loop = SEQAN_PROTIMEDIFF(loopTime);
+    std::cout << loop << "s" << std::endl;
 
     if (seqan::isSet(parser, "f"))
     {
+        SEQAN_PROTIMESTART(loopTime);
+        std::cout << "filtering reads... ";
         BamFileIn bamFileIn2(seqan::toCString(outFilename));
         unsigned clusterSize = 0;
         getOptionValue(clusterSize, parser, "f");
-        std::cout << "filtering reads..." << std::endl;
         // Open output file, BamFileOut accepts also an ostream and a format tag.
         setPosition(bamFileIn2, 0);
         BamFileOut bamFileOut2(bamFileIn2);
@@ -223,21 +251,8 @@ int main(int argc, char const * argv[])
         while (!atEnd(bamFileIn2))
         {
             readRecord(record, bamFileIn2);
-            if (record.flag != 0x00 && record.flag != 0x10)
-                continue;
-
-            std::string idString = toCString(record.qName);
-            size_t const posStart = idString.find("TL:") + 3;
-            if (posStart == std::string::npos)
-                continue;
-            size_t posEnd = idString.find(':', posStart);
-            if (posEnd == std::string::npos)
-                posEnd = idString.length();
-            std::string const barcode = idString.substr(posStart, posEnd - posStart);
-            // pos = chromosome + strand + position
-            std::string const strand = record.flag == 0x00 ? "+" : "-";
-            const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
-            std::string const pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos + offset);
+            std::string pos;
+            getPos(record, pos);
             const auto& it = occurenceMapUnique.find(pos);
             if (it != occurenceMapUnique.end() && it->second >= clusterSize)
             {
@@ -246,12 +261,13 @@ int main(int argc, char const * argv[])
             }
         }
         close(bamFileOut2);
+        loop = SEQAN_PROTIMEDIFF(loopTime);
+        std::cout << loop << "s" << std::endl;
     }
-    std::fstream fs;
-    fs.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
 
     // occurenceMap = number of mappings for each location in genome
     // duplicationRate[x] = number of locations with x mappings
+    SEQAN_PROTIMESTART(finalProcessing);
     std::vector<unsigned> duplicationRateUnique;
     std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](auto &it)
     {
@@ -268,8 +284,12 @@ int main(int argc, char const * argv[])
         ++duplicationRate[it.second - 1];
     });
 
-    std::cout << "calculating unique/non unique duplication Rate..." << std::endl;
-    fs << "Duplication Rate unique/non unique" << std::endl;
+    std::cout << "calculating unique/non unique duplication Rate... ";
+    std::fstream fs,fs2,fs3;
+    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
+    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
+    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out, _SH_DENYNO);
+    fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
     unsigned maxLen = size(duplicationRateUnique) > size(duplicationRate) ? size(duplicationRateUnique) : size(duplicationRate);
     duplicationRateUnique.resize(maxLen);
     std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
@@ -278,12 +298,14 @@ int main(int argc, char const * argv[])
         if (i > 0)
             stats.totalSamePositionReads += (duplicationRate[i] * (i));
         //std::cout << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << std::endl;
-        fs << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << " " 
-            << duplicationRateUnique[i]*(i+1) << " " << duplicationRate[i]*(i+1) <<std::endl;
+        fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
+        fs2 << i + 1 << "\t" << duplicationRateUnique[i]*(i+1) << "\t" << duplicationRate[i]*(i+1) <<std::endl;
     }
+    loop = SEQAN_PROTIMEDIFF(finalProcessing);
+    std::cout << loop << "s" << std::endl;
     printStatistics(stats, seqan::isSet(parser, "f"));
-    printStatistics(fs, stats, seqan::isSet(parser, "f"));
+    fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
+    printStatistics(fs3, stats, seqan::isSet(parser, "f"));
 
-   
 	return 0;
 }
