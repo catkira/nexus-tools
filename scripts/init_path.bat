@@ -1,1 +1,1 @@
-set PATH=%PATH%;P:\git\nexus-tools2_build\bin\release;P:\git\seqan_build\debug-vs15\bin\Release
+set PATH=%PATH%;P:\git\nexus-tools2_build\bin\release;P:\git\seqan_build\debug-vs15\bin\Release;P:\cygwin64\bin;P:\cygwin64\home\samtools-1.2
