@@ -76,6 +76,10 @@ seqan::ArgumentParser buildParser(void)
     setMinValue(recordFilterCluster, "0");
     addOption(parser, recordFilterCluster);
 
+    seqan::ArgParseOption recordSortBam = seqan::ArgParseOption(
+        "s", "sort", "Sort BAM file");
+    addOption(parser, recordSortBam);
+
     seqan::ArgParseOption recordWriteBam = seqan::ArgParseOption(
         "b", "BAI file", "Create a BAI file (activates the sort option)",
         seqan::ArgParseArgument::INPUT_FILE, "BAM/BAI filename");
@@ -236,6 +240,7 @@ int main(int argc, char const * argv[])
         outFilename = getFilePrefix(argv[1]) + std::string("_filtered.bam");
 
     const bool filter = seqan::isSet(parser, "f");
+    const bool sort = seqan::isSet(parser, "s");
 
     //BamAlignmentRecord record;
     // Copy records.
@@ -281,10 +286,12 @@ int main(int argc, char const * argv[])
         }
     }
     saveBam.close();
+    clear(keySet);
 
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
 
+    const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2.bam");
     if (filter)
     {
         SEQAN_PROTIMESTART(loopTime);
@@ -292,7 +299,6 @@ int main(int argc, char const * argv[])
         unsigned clusterSize = 0;
         getOptionValue(clusterSize, parser, "f");
         // Open output file, BamFileOut accepts also an ostream and a format tag.
-        const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2.bam");
         //while (!atEnd(bamFileIn2))
         unsigned ex = 0;
         BamFileIn bamFileIn2(seqan::toCString(outFilename));
@@ -336,6 +342,9 @@ int main(int argc, char const * argv[])
             duplicationRate.resize(it.second);
         ++duplicationRate[it.second - 1];
     });
+    clear(occurenceMap);
+    clear(occurenceMapUnique);
+
 
     std::fstream fs,fs2,fs3;
     fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
@@ -355,6 +364,45 @@ int main(int argc, char const * argv[])
     }
     loop = SEQAN_PROTIMEDIFF(finalProcessing);
     std::cout << loop << "s" << std::endl;
+    clear(duplicationRateUnique);
+    clear(duplicationRate);
+
+    if (sort)
+    {
+        SEQAN_PROTIMESTART(sortTime);
+        std::cout << "sorting BAM file... ";
+        unsigned clusterSize = 0;
+        getOptionValue(clusterSize, parser, "f");
+        // Open output file, BamFileOut accepts also an ostream and a format tag.
+        //while (!atEnd(bamFileIn2))
+        std::string inFilename2;
+        if (filter)
+            inFilename2 = outFilename2;
+        else
+            inFilename2 = outFilename;
+
+        BamFileIn bamFileIn3(seqan::toCString(inFilename2));
+        readHeader(header, bamFileIn3);
+        std::vector<BamAlignmentRecord> records;
+
+        while (!atEnd(bamFileIn3))
+        {
+            readRecord(record, bamFileIn3);
+            records.emplace_back(std::move(record));
+        }
+        close(bamFileIn3);
+        std::sort(records.begin(), records.end(), [](auto &lhs, auto& rhs) {return CompareBamRecordKey<NoBarcode>()(BamRecordKey<NoBarcode>(lhs), BamRecordKey<NoBarcode>(rhs));});
+
+        const std::string outFilename2 = getFilePrefix(inFilename2) + std::string("_sorted.bam");
+        SaveBam<BamFileOut::TDependentContext> saveBam3(header, bamFileIn.context, outFilename2);
+        for (auto record : records)
+            saveBam3.write(record);
+        saveBam3.close();
+
+
+        loop = SEQAN_PROTIMEDIFF(sortTime);
+        std::cout << loop << "s" << std::endl;
+    }
 
     printStatistics(stats, seqan::isSet(parser, "f"));
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
