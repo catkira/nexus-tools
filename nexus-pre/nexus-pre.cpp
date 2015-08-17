@@ -81,10 +81,6 @@ seqan::ArgumentParser buildParser(void)
         seqan::ArgParseArgument::INPUT_FILE, "BAM/BAI filename");
     addOption(parser, recordWriteBam);
 
-    seqan::ArgParseOption recordSortBam = seqan::ArgParseOption(
-        "s", "sort", "create a sorted BAM file");
-    addOption(parser, recordSortBam);
-
     seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
         "r", "records", "Number of records to be read in one run.",
         seqan::ArgParseOption::INTEGER, "VALUE");
@@ -221,9 +217,6 @@ int main(int argc, char const * argv[])
 
     // Open input file, BamFileIn can read SAM and BAM files.
     BamFileIn bamFileIn(seqan::toCString(fileName1));
-
-    // Open output file, BamFileOut accepts also an ostream and a format tag.
-    BamFileOut bamFileOut(bamFileIn);
     
     std::string outFilename;
     if (fileCount == 2)
@@ -234,16 +227,11 @@ int main(int argc, char const * argv[])
     else
         outFilename = getFilePrefix(argv[1]) + std::string("_filtered.bam");
 
-    const bool sort = seqan::isSet(parser, "s");
     const bool filter = seqan::isSet(parser, "f");
-    BamHeader header;
-
-    // Copy header.
 
     //BamAlignmentRecord record;
     // Copy records.
     //std::set<std::string> keySet;
-    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
     std::map<BamRecordKey<WithBarcode>, BamAlignmentRecord, CompareBamRecordKey<WithBarcode>> keyMap;
     std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMapUnique;
     std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMap;
@@ -252,12 +240,12 @@ int main(int argc, char const * argv[])
 
     std::cout << "sorting reads... ";
     SEQAN_PROTIMESTART(loopTime);
-    std::vector<BamAlignmentRecord> sortedBamVector;
     BamAlignmentRecord record;
-    bool writeOutputStage1 = !filter && !sort;
-    bool writeOutputStage2 = filter && !sort;
+    bool writeOutputStage1 = !filter;
 
+    BamHeader header;
     readHeader(header, bamFileIn);
+    setSortOrder(header, BAM_SORT_COORDINATE);
 
     while (!atEnd(bamFileIn))
     {
@@ -274,7 +262,7 @@ int main(int argc, char const * argv[])
             }
             else
             {
-                keyMap[key] = std::move(record);
+                keyMap[key] = record;
                 ++occurenceMapUnique[pos];
             }
             // every read is stored in occurenceMap
@@ -287,43 +275,39 @@ int main(int argc, char const * argv[])
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
 
-    std::vector<BamAlignmentRecord> sortedBamVector2;
     if (filter)
     {
         SEQAN_PROTIMESTART(loopTime);
         std::cout << "filtering reads... ";
-        BamFileIn bamFileIn2(seqan::toCString(outFilename));
         unsigned clusterSize = 0;
         getOptionValue(clusterSize, parser, "f");
         // Open output file, BamFileOut accepts also an ostream and a format tag.
-        setPosition(bamFileIn2, 0);
-        BamFileOut bamFileOut2(bamFileIn2);
         const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2.bam");
         //while (!atEnd(bamFileIn2))
-        auto sortedBamVectorIt = sortedBamVector.begin();
         unsigned ex = 0;
-        auto len = sortedBamVector.size();
-        for (auto keyRecordPair : keyMap)
+        for (auto keyMapIt = keyMap.cbegin(); keyMapIt != keyMap.cend();)
         {
             //readRecord(record, bamFileIn2);
-            const auto& it = occurenceMapUnique.find(BamRecordKey<NoBarcode>(keyRecordPair.first.pos));
-            if (it != occurenceMapUnique.end() && it->second >= clusterSize)
+            auto occurenceMapUniqueIt =  occurenceMapUnique.find(keyMapIt->first.pos);
+            if (occurenceMapUniqueIt->second >= clusterSize)
             {
                 //sortedBamVector2.emplace_back(sortedBamVector[i]);
                 ++stats.readsAfterFiltering;
+                ++keyMapIt;
             }
             else
-                keyMap.erase(keyRecordPair.first);
+                keyMapIt = keyMap.erase(keyMapIt);
         }
 
         loop = SEQAN_PROTIMEDIFF(loopTime);
         std::cout << loop << "s" << std::endl;
+        saveBam(header, keyMap, bamFileIn.context, outFilename2);
     }
 
     // occurenceMap = number of mappings for each location in genome
     // duplicationRate[x] = number of locations with x mappings
     SEQAN_PROTIMESTART(finalProcessing);
-    std::cout << "sorting reads... ";
+    std::cout << "calculating unique/non unique duplication Rate... ";
     std::vector<unsigned> duplicationRateUnique;
     std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](auto &it)
     {
@@ -340,7 +324,6 @@ int main(int argc, char const * argv[])
         ++duplicationRate[it.second - 1];
     });
 
-    std::cout << "calculating unique/non unique duplication Rate... ";
     std::fstream fs,fs2,fs3;
     fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
     fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
