@@ -145,21 +145,30 @@ struct CompareBamRecordKey<WithBarcode>
     }
 };
 
-template <typename TRecords, typename TContext>
-bool saveBam(const BamHeader header, const TRecords& records, const TContext& context, const std::string& filename)
+template <typename TContext>
+struct SaveBam
 {
-    BamFileOut bamFileOut((BamFileOut::TDependentContext)context);
-    if (!open(bamFileOut, filename.c_str()))
+    template <typename TContext>
+    SaveBam(const BamHeader header, const TContext& context, const std::string& filename)
+        : bamFileOut((BamFileOut::TDependentContext)context)
     {
-        std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
-        return false;
+        if (!open(bamFileOut, filename.c_str()))
+        {
+            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
+            return;
+        }
+        writeHeader(bamFileOut, header);
     }
-    writeHeader(bamFileOut, header);
-    for (const auto& record : records)
-        writeRecord(bamFileOut, record.second);
-    close(bamFileOut);
-    return true;
-}
+    void write(const BamAlignmentRecord& record)
+    {
+        writeRecord(bamFileOut, record);
+    }
+    void close()
+    {
+        seqan::close(bamFileOut);
+    }
+    BamFileOut bamFileOut;
+};
 
 template <typename THasBarcode>
 struct BamRecordKey
@@ -208,9 +217,8 @@ int main(int argc, char const * argv[])
         return 1;
     }
 
-    unsigned records;
-    getOptionValue(records, parser, "r");
-
+    unsigned numRecords;
+    getOptionValue(numRecords, parser, "r");
 
     seqan::CharString fileName1, fileName2;
     getArgumentValue(fileName1, parser, 0, 0);
@@ -232,9 +240,10 @@ int main(int argc, char const * argv[])
     //BamAlignmentRecord record;
     // Copy records.
     //std::set<std::string> keySet;
-    std::map<BamRecordKey<WithBarcode>, BamAlignmentRecord, CompareBamRecordKey<WithBarcode>> keyMap;
+    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
     std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMapUnique;
     std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMap;
+    seqan::String<BamAlignmentRecord> records;
 
     Statistics stats;
 
@@ -245,7 +254,8 @@ int main(int argc, char const * argv[])
 
     BamHeader header;
     readHeader(header, bamFileIn);
-    setSortOrder(header, BAM_SORT_COORDINATE);
+    
+    SaveBam<BamFileOut::TDependentContext> saveBam(header, bamFileIn.context, outFilename);
 
     while (!atEnd(bamFileIn))
     {
@@ -256,21 +266,21 @@ int main(int argc, char const * argv[])
             ++stats.totalMappedReads;
             const BamRecordKey<WithBarcode> key(record);
             const BamRecordKey<NoBarcode> pos(record);
-            if (keyMap.find(key) != keyMap.end())
+            if (keySet.find(key) != keySet.end())
             {
                 ++stats.removedReads;
             }
             else
             {
-                keyMap[key] = record;
+                saveBam.write(record);
+                keySet.insert(key);
                 ++occurenceMapUnique[pos];
             }
             // every read is stored in occurenceMap
             ++occurenceMap[pos];
         }
     }
-    if (writeOutputStage1)
-        saveBam(header, keyMap, bamFileIn.context, outFilename);
+    saveBam.close();
 
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
@@ -285,23 +295,26 @@ int main(int argc, char const * argv[])
         const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2.bam");
         //while (!atEnd(bamFileIn2))
         unsigned ex = 0;
-        for (auto keyMapIt = keyMap.cbegin(); keyMapIt != keyMap.cend();)
+        BamFileIn bamFileIn2(seqan::toCString(outFilename));
+        readHeader(header, bamFileIn2);
+        SaveBam<BamFileOut::TDependentContext> saveBam2(header, bamFileIn.context, outFilename2);
+        while (!atEnd(bamFileIn2))
         {
-            //readRecord(record, bamFileIn2);
-            auto occurenceMapUniqueIt =  occurenceMapUnique.find(keyMapIt->first.pos);
+            readRecord(record, bamFileIn2);
+            const auto occurenceMapUniqueIt =  occurenceMapUnique.find(BamRecordKey<NoBarcode>(record));
             if (occurenceMapUniqueIt->second >= clusterSize)
             {
                 //sortedBamVector2.emplace_back(sortedBamVector[i]);
+                saveBam2.write(record);
                 ++stats.readsAfterFiltering;
-                ++keyMapIt;
+                //++keyMapIt;
             }
-            else
-                keyMapIt = keyMap.erase(keyMapIt);
         }
+        saveBam2.close();
 
         loop = SEQAN_PROTIMEDIFF(loopTime);
         std::cout << loop << "s" << std::endl;
-        saveBam(header, keyMap, bamFileIn.context, outFilename2);
+
     }
 
     // occurenceMap = number of mappings for each location in genome
