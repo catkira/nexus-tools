@@ -7,6 +7,8 @@
 #include <string>
 #include <unordered_set>
 #include <unordered_map>
+#include <boost/container/flat_map.hpp>
+#include <boost/container/flat_set.hpp>
 
 using namespace seqan;
 
@@ -109,33 +111,69 @@ std::string getFilePrefix(const std::string& fileName, const bool withPath = tru
     return fileName.substr(found2 + 1, found - found2);
 }
 
-void getPos(const BamAlignmentRecord &record, std::string &pos)
-{
-    const std::string idString = toCString(record.qName);
-    // pos = chromosome + strand + position
-    std::string const strand = record.flag == 0x00 ? "+" : "-";
-    const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
-    pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos + offset);
-    return;
-}
+class WithBarcode {};
+class NoBarcode {};
 
-bool getKey(const BamAlignmentRecord &record, std::string &key, std::string &pos)
+bool isRev(const BamAlignmentRecord &record)
 {
-    const std::string idString = toCString(record.qName);
-    size_t const posStart = idString.find("TL:") + 3;
-    if (posStart == std::string::npos)
+    return (record.flag & 0x10) != 0;
+};
+
+template <typename THasBarcode>
+struct CompareBamRecordKey
+{
+    template <typename TBamRecordKey>
+    bool operator()(const TBamRecordKey &lhs, const TBamRecordKey& rhs) const
+    {
+        return lhs.pos < rhs.pos;
+    }
+};
+
+template <>
+struct CompareBamRecordKey<WithBarcode>
+{
+    template <typename TBamRecordKey>
+    bool operator()(const TBamRecordKey &lhs, const TBamRecordKey& rhs) const
+    {
+        if (lhs.pos != rhs.pos)
+            return lhs.pos < rhs.pos;
+        if (lhs.barcode.empty() == false && rhs.barcode.empty() == false
+            && lhs.barcode != rhs.barcode)
+            return lhs.barcode < rhs.barcode;
         return false;
-    size_t posEnd = idString.find(':', posStart);
-    if (posEnd == std::string::npos)
-        posEnd = idString.length();
-    std::string const barcode = idString.substr(posStart, posEnd - posStart);
-    // pos = chromosome + strand + position
-    std::string const strand = record.flag == 0x00 ? "+" : "-";
-    const size_t offset = record.flag == 0x00 ? 0 : seqan::length(record.seq);
-    pos = std::to_string(record.rID) + strand + ":" + std::to_string(record.beginPos + offset);
-    key = barcode + ":" + pos;
-    return true;
-}
+    }
+};
+
+
+template <typename THasBarcode>
+struct BamRecordKey
+{
+    //BamRecordKey(const uint64_t pos) : pos(pos){};
+    BamRecordKey(const BamAlignmentRecord &record)
+    {
+        pos = (uint64_t)record.rID << 32 | (record.beginPos + (isRev(record) == true ? length(record.seq) : 0)) << 1 | (uint64_t)isRev(record);
+    };
+    typedef CompareBamRecordKey<WithBarcode> TCompareBamRecordKey;
+    uint64_t pos;
+};
+
+template <>
+struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
+{
+    BamRecordKey(const BamAlignmentRecord &record) : BamRecordKey<NoBarcode>(record)
+    {
+        const std::string idString = toCString(record.qName);
+        size_t const posStart = idString.find("TL:") + 3;
+        if (posStart == std::string::npos)
+            return;
+        size_t posEnd = idString.find(':', posStart);
+        if (posEnd == std::string::npos)
+            posEnd = idString.length();
+        barcode = idString.substr(posStart, posEnd - posStart);
+    }
+    typedef CompareBamRecordKey<NoBarcode> TCompareBamRecordKey;
+    std::string barcode;
+};
 
 int main(int argc, char const * argv[])
 {
@@ -188,15 +226,18 @@ int main(int argc, char const * argv[])
 
     BamAlignmentRecord record;
     // Copy records.
-    std::set<std::string> keySet;
-    std::map<std::string, unsigned> occurenceMapUnique;
-    std::unordered_map<std::string, unsigned> occurenceMap;
+    //std::set<std::string> keySet;
+    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
+    std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMapUnique;
+    std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMap;
 
     Statistics stats;
 
     std::cout << "sorting reads... ";
     SEQAN_PROTIMESTART(loopTime);
-
+    //keySet.reserve(1000000);
+    //occurenceMapUnique.reserve(1000000);
+    //occurenceMap.reserve(1000000);
     while (!atEnd(bamFileIn))
     {
         readRecord(record, bamFileIn);
@@ -204,9 +245,10 @@ int main(int argc, char const * argv[])
         if (record.flag == 0x00 || record.flag == 0x10)
         {
             ++stats.totalMappedReads;
-            std::string key, pos;
-            if(!getKey(record, key, pos))
-                continue;
+            const BamRecordKey<WithBarcode> key(record);
+            const BamRecordKey<NoBarcode> pos(record);
+            //if(!getKey(record, key, pos))
+            //    continue;
             if (keySet.find(key) != keySet.end())
             {
                 ++stats.removedReads;
@@ -216,7 +258,6 @@ int main(int argc, char const * argv[])
             {
                 keySet.emplace(std::move(key));
                 writeRecord(bamFileOut, record);
-                // only count each key once for the occurenceMapUnique 
                 ++occurenceMapUnique[pos];
             }
             // every read is stored in occurenceMap
@@ -251,8 +292,7 @@ int main(int argc, char const * argv[])
         while (!atEnd(bamFileIn2))
         {
             readRecord(record, bamFileIn2);
-            std::string pos;
-            getPos(record, pos);
+            const BamRecordKey<NoBarcode> pos(record);
             const auto& it = occurenceMapUnique.find(pos);
             if (it != occurenceMapUnique.end() && it->second >= clusterSize)
             {
