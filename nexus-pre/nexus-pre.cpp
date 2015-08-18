@@ -248,7 +248,6 @@ int main(int argc, char const * argv[])
     std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
     std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMapUnique;
     std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMap;
-    seqan::String<BamAlignmentRecord> records;
 
     Statistics stats;
 
