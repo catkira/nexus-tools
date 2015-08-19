@@ -122,7 +122,7 @@ class NoBarcode {};
 bool isRev(const BamAlignmentRecord &record)
 {
     return (record.flag & 0x10) != 0;
-};
+}
 
 template <typename THasBarcode>
 struct CompareBamRecordKey
@@ -152,9 +152,8 @@ struct CompareBamRecordKey<WithBarcode>
 template <typename TContext>
 struct SaveBam
 {
-    template <typename TContext>
-    SaveBam(const BamHeader header, const TContext& context, const std::string& filename)
-        : bamFileOut((BamFileOut::TDependentContext)context)
+    SaveBam(const BamHeader header, TContext& context, const std::string& filename)
+        : bamFileOut(static_cast<TContext>(context))
     {
         if (!open(bamFileOut, filename.c_str()))
         {
@@ -242,24 +241,22 @@ int main(int argc, char const * argv[])
     const bool filter = seqan::isSet(parser, "f");
     const bool sort = seqan::isSet(parser, "s");
 
-    //BamAlignmentRecord record;
-    // Copy records.
-    //std::set<std::string> keySet;
+    typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMapUnique;
+    typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMap;
     std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
-    std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMapUnique;
-    std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> occurenceMap;
+    OccurenceMapUnique occurenceMapUnique;
+    OccurenceMap occurenceMap;
 
     Statistics stats;
 
     std::cout << "sorting reads... ";
     SEQAN_PROTIMESTART(loopTime);
     BamAlignmentRecord record;
-    bool writeOutputStage1 = !filter;
 
     BamHeader header;
     readHeader(header, bamFileIn);
     
-    SaveBam<BamFileOut::TDependentContext> saveBam(header, bamFileIn.context, outFilename);
+    SaveBam<BamFileIn> saveBam(header, bamFileIn, outFilename);
 
     while (!atEnd(bamFileIn))
     {
@@ -299,10 +296,9 @@ int main(int argc, char const * argv[])
         getOptionValue(clusterSize, parser, "f");
         // Open output file, BamFileOut accepts also an ostream and a format tag.
         //while (!atEnd(bamFileIn2))
-        unsigned ex = 0;
         BamFileIn bamFileIn2(seqan::toCString(outFilename));
         readHeader(header, bamFileIn2);
-        SaveBam<BamFileOut::TDependentContext> saveBam2(header, bamFileIn.context, outFilename2);
+        SaveBam<BamFileIn> saveBam2(header, bamFileIn, outFilename2);
         while (!atEnd(bamFileIn2))
         {
             readRecord(record, bamFileIn2);
@@ -327,30 +323,35 @@ int main(int argc, char const * argv[])
     SEQAN_PROTIMESTART(finalProcessing);
     std::cout << "calculating unique/non unique duplication Rate... ";
     std::vector<unsigned> duplicationRateUnique;
-    std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](auto &it)
+    std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](const OccurenceMapUnique::value_type& val)
     {
-        if (duplicationRateUnique.size() < it.second)
-            duplicationRateUnique.resize(it.second);
-        ++duplicationRateUnique[it.second - 1];
+        if (duplicationRateUnique.size() < val.second)
+            duplicationRateUnique.resize(val.second);
+        ++duplicationRateUnique[val.second - 1];
     });
 
     std::vector<unsigned> duplicationRate;
-    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](auto &it)
+    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMapUnique::value_type& val)
     {
-        if (duplicationRate.size() < it.second)
-            duplicationRate.resize(it.second);
-        ++duplicationRate[it.second - 1];
+        if (duplicationRate.size() < val.second)
+            duplicationRate.resize(val.second);
+        ++duplicationRate[val.second - 1];
     });
     clear(occurenceMap);
     clear(occurenceMapUnique);
 
 
     std::fstream fs,fs2,fs3;
+#ifdef _MSC_VER
     fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
-    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
     fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out, _SH_DENYNO);
+#else
+    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out);
+    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out);
+#endif
+    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
     fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
-    unsigned maxLen = size(duplicationRateUnique) > size(duplicationRate) ? size(duplicationRateUnique) : size(duplicationRate);
+    unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
     duplicationRateUnique.resize(maxLen);
     std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
     for (unsigned i = 0; i < maxLen;++i)
@@ -390,10 +391,10 @@ int main(int argc, char const * argv[])
             records.emplace_back(std::move(record));
         }
         close(bamFileIn3);
-        std::sort(records.begin(), records.end(), [](auto &lhs, auto& rhs) {return CompareBamRecordKey<NoBarcode>()(BamRecordKey<NoBarcode>(lhs), BamRecordKey<NoBarcode>(rhs));});
+        std::sort(records.begin(), records.end(), [](const BamAlignmentRecord& lhs, const BamAlignmentRecord& rhs) {return CompareBamRecordKey<NoBarcode>()(BamRecordKey<NoBarcode>(lhs), BamRecordKey<NoBarcode>(rhs));});
 
         const std::string outFilename2 = getFilePrefix(inFilename2) + std::string("_sorted.bam");
-        SaveBam<BamFileOut::TDependentContext> saveBam3(header, bamFileIn.context, outFilename2);
+        SaveBam<BamFileIn> saveBam3(header, bamFileIn, outFilename2);
         for (auto record : records)
             saveBam3.write(record);
         saveBam3.close();
@@ -404,7 +405,11 @@ int main(int argc, char const * argv[])
     }
 
     printStatistics(stats, seqan::isSet(parser, "f"));
+#ifdef _MSV_VER
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
+#else
+    fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
+#endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"));
 
 	return 0;
