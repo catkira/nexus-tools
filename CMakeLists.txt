@@ -26,6 +26,7 @@ seqan_setup_library ()
 include (package)
 include (SeqAnCtdSetup)
 find_package (SeqAn REQUIRED)
+find_package (FindCXX11 REQUIRED)
 
 # Add definitions set by the build system.
 add_definitions (-DSEQAN_APP_VERSION="${SEQAN_APP_VERSION}")
@@ -33,7 +34,7 @@ add_definitions (-DSEQAN_REVISION="${SEQAN_REVISION}")
 add_definitions (-DSEQAN_DATE="${SEQAN_DATE}")
 
 # Add CXX flags found by find_package (SeqAn).
-set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS}")
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS}" ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS}")
 
 add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
