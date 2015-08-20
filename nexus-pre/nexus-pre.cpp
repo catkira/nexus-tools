@@ -297,8 +297,9 @@ int main(int argc, char const * argv[])
         // Open output file, BamFileOut accepts also an ostream and a format tag.
         //while (!atEnd(bamFileIn2))
         BamFileIn bamFileIn2(seqan::toCString(outFilename));
+        //clear(header);
         readHeader(header, bamFileIn2);
-        SaveBam<BamFileIn> saveBam2(header, bamFileIn, outFilename2);
+        SaveBam<BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
         while (!atEnd(bamFileIn2))
         {
             readRecord(record, bamFileIn2);
