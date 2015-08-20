@@ -203,7 +203,7 @@ struct BamRecordKey
     BamRecordKey(const BamAlignmentRecord &record)
     {
         pos = static_cast<uint64_t>(record.rID) << 32 | 
-            static_cast<uint64_t>((record.beginPos + (isRev(record) == true ? length(record.seq) : 0))) << 1 | 
+            static_cast<uint64_t>((record.beginPos + static_cast<uint64_t>((isRev(record) == true ? length(record.seq) : 0)))) << 1 |
             static_cast<uint64_t>(isRev(record));
     };
     typedef CompareBamRecordKey<WithBarcode> TCompareBamRecordKey;
@@ -363,10 +363,10 @@ int main(int argc, char const * argv[])
         {
             bedRecord.score = std::to_string(val.second);
             bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
-            bedRecord.beginPos = static_cast<__int32>(val.first.pos >> 1);
+            bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) +1;
             bedRecord.endPos = 0; // ignore this for now
             bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-            if(bedRecord.beginPos & 0x01)
+            if(val.first.pos & 0x01)
                 saveBedReverseStrand.write(bedRecord);
             else
                 saveBedForwardStrand.write(bedRecord);
