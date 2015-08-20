@@ -1,6 +1,7 @@
 #define SEQAN_PROFILE
 
 #include <seqan/bam_io.h>
+#include <seqan/bed_io.h>
 #include <seqan/seq_io.h>
 #include <seqan/arg_parse.h>
 #include <seqan/basic.h>
@@ -80,10 +81,9 @@ seqan::ArgumentParser buildParser(void)
         "s", "sort", "Sort BAM file");
     addOption(parser, recordSortBam);
 
-    seqan::ArgParseOption recordWriteBam = seqan::ArgParseOption(
-        "b", "BAI file", "Create a BAI file (activates the sort option)",
-        seqan::ArgParseArgument::INPUT_FILE, "BAM/BAI filename");
-    addOption(parser, recordWriteBam);
+    seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
+        "b", "bed", "Create a BED file");
+    addOption(parser, recordWriteBed);
 
     seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
         "r", "records", "Number of records to be read in one run.",
@@ -149,13 +149,36 @@ struct CompareBamRecordKey<WithBarcode>
     }
 };
 
+struct SaveBed
+{
+    SaveBed(const std::string& filename) : bedFileOut()
+    {
+        if (!open(bedFileOut, (filename + ".bed").c_str()))
+        {
+            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
+            return;
+        }
+    }
+    template <typename TBedRecord>
+    void write(TBedRecord& record)
+    {
+        writeRecord(bedFileOut, record);
+    }
+    void close()
+    {
+        seqan::close(bedFileOut);
+    }
+    BedFileOut bedFileOut;
+};
+
+
 template <typename TContext>
 struct SaveBam
 {
     SaveBam(const BamHeader header, TContext& context, const std::string& filename)
         : bamFileOut(static_cast<TContext>(context))
     {
-        if (!open(bamFileOut, filename.c_str()))
+        if (!open(bamFileOut, (filename + ".bam").c_str()))
         {
             std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
             return;
@@ -179,7 +202,9 @@ struct BamRecordKey
     BamRecordKey(const uint64_t pos) : pos(pos){};
     BamRecordKey(const BamAlignmentRecord &record)
     {
-        pos = (uint64_t)record.rID << 32 | (record.beginPos + (isRev(record) == true ? length(record.seq) : 0)) << 1 | (uint64_t)isRev(record);
+        pos = static_cast<uint64_t>(record.rID) << 32 | 
+            static_cast<uint64_t>((record.beginPos + (isRev(record) == true ? length(record.seq) : 0))) << 1 | 
+            static_cast<uint64_t>(isRev(record));
     };
     typedef CompareBamRecordKey<WithBarcode> TCompareBamRecordKey;
     uint64_t pos;
@@ -236,10 +261,11 @@ int main(int argc, char const * argv[])
         outFilename = seqan::toCString(fileName2);
     }
     else
-        outFilename = getFilePrefix(argv[1]) + std::string("_filtered.bam");
+        outFilename = getFilePrefix(argv[1]) + std::string("_filtered");
 
     const bool filter = seqan::isSet(parser, "f");
     const bool sort = seqan::isSet(parser, "s");
+    const bool bedOutputEnabled = seqan::isSet(parser, "b");
 
     typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMapUnique;
     typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMap;
@@ -249,7 +275,7 @@ int main(int argc, char const * argv[])
 
     Statistics stats;
 
-    std::cout << "sorting reads... ";
+    std::cout << "barcode filtering... ";
     SEQAN_PROTIMESTART(loopTime);
     BamAlignmentRecord record;
 
@@ -287,7 +313,7 @@ int main(int argc, char const * argv[])
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
 
-    const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2.bam");
+    const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
     if (filter)
     {
         SEQAN_PROTIMESTART(loopTime);
@@ -323,13 +349,34 @@ int main(int argc, char const * argv[])
     // duplicationRate[x] = number of locations with x mappings
     SEQAN_PROTIMESTART(finalProcessing);
     std::cout << "calculating unique/non unique duplication Rate... ";
+
+    //if(bedOutputEnabled)
+    SaveBed saveBedForwardStrand(outFilename + "_forward");
+    SaveBed saveBedReverseStrand(outFilename + "_reverse");
+
+    BedRecord<Bed5> bedRecord;
+
     std::vector<unsigned> duplicationRateUnique;
     std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](const OccurenceMapUnique::value_type& val)
     {
+        if (bedOutputEnabled)
+        {
+            bedRecord.score = std::to_string(val.second);
+            bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
+            bedRecord.beginPos = static_cast<__int32>(val.first.pos >> 1);
+            bedRecord.endPos = 0; // ignore this for now
+            bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
+            if(bedRecord.beginPos & 0x01)
+                saveBedReverseStrand.write(bedRecord);
+            else
+                saveBedForwardStrand.write(bedRecord);
+        }
         if (duplicationRateUnique.size() < val.second)
             duplicationRateUnique.resize(val.second);
         ++duplicationRateUnique[val.second - 1];
     });
+    saveBedForwardStrand.close();
+    saveBedReverseStrand.close();
 
     std::vector<unsigned> duplicationRate;
     std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMapUnique::value_type& val)
