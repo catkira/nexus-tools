@@ -15,7 +15,7 @@ parser.add_argument('input_file')
 results, leftovers = parser.parse_known_args()
 
 print results.input_file
-print results.output
+#print results.output
 
 if results.output is not None:
  outFilenamePrefix, file_extension = os.path.splitext(results.output)
@@ -23,7 +23,25 @@ if results.output is not None:
 else:
  outFilenamePrefix, file_extension = os.path.splitext(results.input_file)
  outFilenamePrefix += "_sorted"
-print "output file: " + outFilenamePrefix + ".bam"
+#print "output file: " + outFilenamePrefix + ".bam"
+
+inputFile = results.input_file
+
+inFilenamePrefix, inFileExtension = os.path.splitext(results.input_file)
+if inFileExtension == ".sam":
+ args = ("samtools", "view", "-Sb", results.input_file)
+ print "converting to BAM..."
+ #print args
+ f = open(inFilenamePrefix + ".bam", "w")
+ popen = subprocess.Popen(args, stdout=f)
+ popen.wait()
+ f.close()
+ if popen.returncode != 0:
+  print "error"
+  sys.exit()
+ print inFilenamePrefix + ".bam created"
+ inputFile = inFilenamePrefix + ".bam"
+
 args = ("samtools", "sort", results.input_file, outFilenamePrefix)
 print "sorting..."
 #print args
