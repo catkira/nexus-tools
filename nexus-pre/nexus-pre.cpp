@@ -322,7 +322,7 @@ int main(int argc, char const * argv[])
         getOptionValue(clusterSize, parser, "f");
         // Open output file, BamFileOut accepts also an ostream and a format tag.
         //while (!atEnd(bamFileIn2))
-        BamFileIn bamFileIn2(seqan::toCString(outFilename));
+        BamFileIn bamFileIn2(seqan::toCString(outFilename + ".bam"));
         //clear(header);
         readHeader(header, bamFileIn2);
         SaveBam<BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
@@ -361,15 +361,19 @@ int main(int argc, char const * argv[])
     {
         if (bedOutputEnabled)
         {
-            bedRecord.score = std::to_string(val.second);
+            bedRecord.score = std::to_string(val.second); // dont know if this is useful
             bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
-            bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) +1;
-            bedRecord.endPos = 0; // ignore this for now
+            bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) +1; // bam files start with 0, sam and bed with 1
+            // for forward strand endPos = beginPos +1, for backward strand beginPos - 1
+            bedRecord.endPos = (val.first.pos & 0x01) == 0 ? bedRecord.beginPos + 1 : bedRecord.beginPos - 1; 
             bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-            if(val.first.pos & 0x01)
-                saveBedReverseStrand.write(bedRecord);
-            else
-                saveBedForwardStrand.write(bedRecord);
+            for (unsigned n = 0; n < val.second; ++n)
+            {
+                if (val.first.pos & 0x01)
+                    saveBedReverseStrand.write(bedRecord);
+                else
+                    saveBedForwardStrand.write(bedRecord);
+            }
         }
         if (duplicationRateUnique.size() < val.second)
             duplicationRateUnique.resize(val.second);
