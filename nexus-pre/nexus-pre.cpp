@@ -82,7 +82,7 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, recordSortBam);
 
     seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
-        "b", "bed", "Create a BED file");
+        "b", "bedGraph", "Create a BedGraph file");
     addOption(parser, recordWriteBed);
 
     seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
@@ -163,6 +163,10 @@ struct SaveBed
     void write(TBedRecord& record)
     {
         writeRecord(bedFileOut, record);
+    }
+    void writeHeader(const CharString& header)
+    {
+        seqan::write(bedFileOut.iter, header);
     }
     void close()
     {
@@ -350,29 +354,37 @@ int main(int argc, char const * argv[])
     SEQAN_PROTIMESTART(finalProcessing);
     std::cout << "calculating unique/non unique duplication Rate... ";
 
-    //if(bedOutputEnabled)
     SaveBed saveBedForwardStrand(outFilename + "_forward");
     SaveBed saveBedReverseStrand(outFilename + "_reverse");
+    if (bedOutputEnabled)
+    {
+        saveBedForwardStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
+        saveBedReverseStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
+    }
 
-    BedRecord<Bed5> bedRecord;
+    BedRecord<Bed4> bedRecord;
 
     std::vector<unsigned> duplicationRateUnique;
     std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](const OccurenceMapUnique::value_type& val)
     {
         if (bedOutputEnabled)
         {
-            bedRecord.score = std::to_string(val.second); // dont know if this is useful
             bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
-            bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) +1; // bam files start with 0, sam and bed with 1
-            // for forward strand endPos = beginPos +1, for backward strand beginPos - 1
-            bedRecord.endPos = (val.first.pos & 0x01) == 0 ? bedRecord.beginPos + 1 : bedRecord.beginPos - 1; 
             bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-            for (unsigned n = 0; n < val.second; ++n)
+            if (val.first.pos & 0x01)    // reverse strand
             {
-                if (val.first.pos & 0x01)
-                    saveBedReverseStrand.write(bedRecord);
-                else
-                    saveBedForwardStrand.write(bedRecord);
+                // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
+                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) - 1; 
+                bedRecord.endPos = bedRecord.beginPos + 1;
+                bedRecord.name = std::to_string(-static_cast<int32_t>(val.second)); // abuse name as val parameter in BedGraph
+                saveBedReverseStrand.write(bedRecord);
+            }
+            else    // forward strand
+            {
+                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1);
+                bedRecord.endPos = bedRecord.beginPos + 1;
+                bedRecord.name = std::to_string(val.second); // abuse name as val parameter in BedGraph
+                saveBedForwardStrand.write(bedRecord);
             }
         }
         if (duplicationRateUnique.size() < val.second)
