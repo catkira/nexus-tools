@@ -28,6 +28,14 @@ struct DoubleStrandPosition : SingleStrandPosition
 };
 
 template <typename TEdgeDistribution>
+struct PeakCandidate
+{
+    Range<TEdgeDistribution> range;
+    typename TEdgeDistribution::const_iterator centerIt;
+    int score;
+};
+
+template <typename TEdgeDistribution>
 int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
     const unsigned widthLimit, Range<TEdgeDistribution>& windowRange)
 {
@@ -67,25 +75,46 @@ int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt
 
 template <typename TEdgeDistribution>
 void collectForwardCandidates(Range<TEdgeDistribution> range,
-    const int scoreLimit, const unsigned widthLimit, std::vector<Range<TEdgeDistribution>>& candidatePositions)
+    const int scoreLimit, const unsigned widthLimit, std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
 {
     int score = 0;
     int lastScore = 0;
-    Range<TEdgeDistribution> slidingWindowRate, tempSlidingWindowRange;
+    PeakCandidate<TEdgeDistribution> peakCandidate;
+    Range<TEdgeDistribution> slidingWindowRange, tempSlidingWindowRange;
     for (TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
     {
         score = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, tempSlidingWindowRange);
         if (score >= scoreLimit && score > lastScore)
         {
             lastScore = score;
-            slidingWindowRate = tempSlidingWindowRange;
+            slidingWindowRange = tempSlidingWindowRange;
             continue;
         }
         if (lastScore > 0)
         {
-            candidatePositions.push_back(slidingWindowRate);
+            peakCandidate.centerIt = it;
+            peakCandidate.range = range;
+            peakCandidate.score = score;
+            candidatePositions.push_back(peakCandidate);
+            it = slidingWindowRange.second;
             lastScore = 0;
         }
+    }
+}
+
+template <typename TEdgeDistribution, typename TWriter, typename TContext>
+void forwardCandidatesToBed(const std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions, TWriter& writer, TContext& context)
+{
+    TWriter::BedRecord bedRecord;
+    for (const auto& element : candidatePositions)
+    {
+        bedRecord.rID = static_cast<int32_t>(element.centerIt->first.pos >> 32);
+        bedRecord.ref = contigNames(context)[bedRecord.rID];    // ADL
+        bedRecord.beginPos = (static_cast<int32_t>(element.centerIt->first.pos) >> 1) - 1;
+        bedRecord.endPos = bedRecord.beginPos + 1;
+        bedRecord.name = std::to_string(element.score); // abuse name as score parameter in BedGraph
+
+        writer.write(bedRecord);
     }
 }
 

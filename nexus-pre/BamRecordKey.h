@@ -1,4 +1,5 @@
-#pragma once
+#ifndef BAM_RECORD_KEY_H_
+#define BAM_RECORD_KEY_H_
 
 class WithBarcode {};
 class NoBarcode {};
@@ -79,3 +80,4 @@ bool isRev(const seqan::BamAlignmentRecord &record)
     return (record.flag & 0x10) != 0;
 }
 
+#endif

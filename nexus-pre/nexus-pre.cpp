@@ -119,9 +119,10 @@ std::string getFilePrefix(const std::string& fileName, const bool withPath = tru
     return fileName.substr(found2 + 1, found - found2);
 }
 
-
+template <typename TBedRecord>
 struct SaveBed
 {
+    using BedRecord = TBedRecord;
     SaveBed(const std::string& filename) : bedFileOut()
     {
         if (!open(bedFileOut, (filename + ".bed").c_str()))
@@ -130,7 +131,6 @@ struct SaveBed
             return;
         }
     }
-    template <typename TBedRecord>
     void write(TBedRecord& record)
     {
         writeRecord(bedFileOut, record);
@@ -321,8 +321,8 @@ int main(int argc, char const * argv[])
     SEQAN_PROTIMESTART(finalProcessing);
     std::cout << "calculating unique/non unique duplication Rate... ";
 
-    SaveBed saveBedForwardStrand(outFilename + "_forward");
-    SaveBed saveBedReverseStrand(outFilename + "_reverse");
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedForwardStrand(outFilename + "_forward");
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedReverseStrand(outFilename + "_reverse");
     if (bedOutputEnabled)
     {
         saveBedForwardStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
@@ -442,12 +442,16 @@ int main(int argc, char const * argv[])
 
     SEQAN_PROTIMESTART(peakCandidatesTime);
     std::cout << "calculating peak candidates...";
-    std::vector<Range<OccurenceMapUnique>> positionsVector;
+    std::vector<PeakCandidate<OccurenceMapUnique>> positionsVector;
     const int scoreLimit = 10;
     collectForwardCandidates<OccurenceMapUnique>(Range<OccurenceMapUnique>(occurenceMapUnique.begin(), occurenceMapUnique.end()), scoreLimit, 50, positionsVector);
     loop = SEQAN_PROTIMEDIFF(peakCandidatesTime);
     std::cout << loop << "s" << std::endl;
     std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
+
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename + "_candidateScores");
+    saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
+    forwardCandidatesToBed<OccurenceMapUnique, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
 
 	return 0;
 }
