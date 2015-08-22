@@ -12,8 +12,11 @@
 #include <boost/container/flat_set.hpp>
 #include <algorithm>
 
-using namespace seqan;
+#include "peak.h"
+#include "BamRecordKey.h"
 
+using seqan::_proFloat;
+using seqan::sysTime;
 
 struct Statistics
 {
@@ -116,38 +119,6 @@ std::string getFilePrefix(const std::string& fileName, const bool withPath = tru
     return fileName.substr(found2 + 1, found - found2);
 }
 
-class WithBarcode {};
-class NoBarcode {};
-
-bool isRev(const BamAlignmentRecord &record)
-{
-    return (record.flag & 0x10) != 0;
-}
-
-template <typename THasBarcode>
-struct CompareBamRecordKey
-{
-    template <typename TBamRecordKey>
-    bool operator()(const TBamRecordKey &lhs, const TBamRecordKey& rhs) const
-    {
-        return lhs.pos < rhs.pos;
-    }
-};
-
-template <>
-struct CompareBamRecordKey<WithBarcode>
-{
-    template <typename TBamRecordKey>
-    bool operator()(const TBamRecordKey &lhs, const TBamRecordKey& rhs) const
-    {
-        if (lhs.pos != rhs.pos)
-            return lhs.pos < rhs.pos;
-        if (lhs.barcode.empty() == false && rhs.barcode.empty() == false
-            && lhs.barcode != rhs.barcode)
-            return lhs.barcode < rhs.barcode;
-        return false;
-    }
-};
 
 struct SaveBed
 {
@@ -164,7 +135,7 @@ struct SaveBed
     {
         writeRecord(bedFileOut, record);
     }
-    void writeHeader(const CharString& header)
+    void writeHeader(const seqan::CharString& header)
     {
         seqan::write(bedFileOut.iter, header);
     }
@@ -172,14 +143,14 @@ struct SaveBed
     {
         seqan::close(bedFileOut);
     }
-    BedFileOut bedFileOut;
+    seqan::BedFileOut bedFileOut;
 };
 
 
 template <typename TContext>
 struct SaveBam
 {
-    SaveBam(const BamHeader header, TContext& context, const std::string& filename)
+    SaveBam(const seqan::BamHeader header, TContext& context, const std::string& filename)
         : bamFileOut(static_cast<TContext>(context))
     {
         if (!open(bamFileOut, (filename + ".bam").c_str()))
@@ -189,7 +160,7 @@ struct SaveBam
         }
         writeHeader(bamFileOut, header);
     }
-    void write(const BamAlignmentRecord& record)
+    void write(const seqan::BamAlignmentRecord& record)
     {
         writeRecord(bamFileOut, record);
     }
@@ -197,40 +168,36 @@ struct SaveBam
     {
         seqan::close(bamFileOut);
     }
-    BamFileOut bamFileOut;
+    seqan::BamFileOut bamFileOut;
 };
 
-template <typename THasBarcode>
-struct BamRecordKey
-{
-    BamRecordKey(const uint64_t pos) : pos(pos){};
-    BamRecordKey(const BamAlignmentRecord &record)
-    {
-        pos = static_cast<uint64_t>(record.rID) << 32 | 
-            static_cast<uint64_t>((record.beginPos + static_cast<uint64_t>((isRev(record) == true ? length(record.seq) : 0)))) << 1 |
-            static_cast<uint64_t>(isRev(record));
-    };
-    typedef CompareBamRecordKey<WithBarcode> TCompareBamRecordKey;
-    uint64_t pos;
-};
 
-template <>
-struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
+typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMapUnique;
+typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMap;
+
+BamRecordKey<NoBarcode> getKey(const OccurenceMapUnique::value_type& val)
 {
-    BamRecordKey(const BamAlignmentRecord &record) : BamRecordKey<NoBarcode>(record)
-    {
-        const std::string idString = toCString(record.qName);
-        size_t const posStart = idString.find("TL:") + 3;
-        if (posStart == std::string::npos)
-            return;
-        size_t posEnd = idString.find(':', posStart);
-        if (posEnd == std::string::npos)
-            posEnd = idString.length();
-        barcode = idString.substr(posStart, posEnd - posStart);
-    }
-    typedef CompareBamRecordKey<NoBarcode> TCompareBamRecordKey;
-    std::string barcode;
-};
+    return val.first;
+}
+
+unsigned getFrequency(const OccurenceMapUnique::value_type& val)
+{
+    return val.second;
+}
+
+bool isReverseStrand(const OccurenceMapUnique::value_type& val)
+{
+    return (val.first.pos & 0x01) != 0;
+}
+
+template <typename TPosition>
+TPosition getPosition(const OccurenceMapUnique::value_type& val)
+{
+    TPosition position;
+    position.chromosomeID = static_cast<__int32>(val.first.pos >> 32);
+    position.position = static_cast<__int32>(val.first.pos) >> 1;
+    return position;    // assume return value optimization
+}
 
 int main(int argc, char const * argv[])
 {
@@ -256,7 +223,7 @@ int main(int argc, char const * argv[])
     getArgumentValue(fileName1, parser, 0, 0);
 
     // Open input file, BamFileIn can read SAM and BAM files.
-    BamFileIn bamFileIn(seqan::toCString(fileName1));
+    seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
     
     std::string outFilename;
     if (fileCount == 2)
@@ -281,12 +248,12 @@ int main(int argc, char const * argv[])
 
     std::cout << "barcode filtering... ";
     SEQAN_PROTIMESTART(loopTime);
-    BamAlignmentRecord record;
+    seqan::BamAlignmentRecord record;
 
-    BamHeader header;
+    seqan::BamHeader header;
     readHeader(header, bamFileIn);
     
-    SaveBam<BamFileIn> saveBam(header, bamFileIn, outFilename);
+    SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
 
     while (!atEnd(bamFileIn))
     {
@@ -312,7 +279,7 @@ int main(int argc, char const * argv[])
         }
     }
     saveBam.close();
-    clear(keySet);
+    seqan::clear(keySet);
 
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
@@ -326,10 +293,10 @@ int main(int argc, char const * argv[])
         getOptionValue(clusterSize, parser, "f");
         // Open output file, BamFileOut accepts also an ostream and a format tag.
         //while (!atEnd(bamFileIn2))
-        BamFileIn bamFileIn2(seqan::toCString(outFilename + ".bam"));
+        seqan::BamFileIn bamFileIn2(seqan::toCString(outFilename + ".bam"));
         //clear(header);
         readHeader(header, bamFileIn2);
-        SaveBam<BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
+        SaveBam<seqan::BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
         while (!atEnd(bamFileIn2))
         {
             readRecord(record, bamFileIn2);
@@ -362,7 +329,7 @@ int main(int argc, char const * argv[])
         saveBedReverseStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
     }
 
-    BedRecord<Bed4> bedRecord;
+    seqan::BedRecord<seqan::Bed4> bedRecord;
 
     std::vector<unsigned> duplicationRateUnique;
     std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](const OccurenceMapUnique::value_type& val)
@@ -401,8 +368,8 @@ int main(int argc, char const * argv[])
             duplicationRate.resize(val.second);
         ++duplicationRate[val.second - 1];
     });
-    clear(occurenceMap);
-    clear(occurenceMapUnique);
+    occurenceMap.clear();
+    occurenceMapUnique.clear();
 
 
     std::fstream fs,fs2,fs3;
@@ -428,8 +395,8 @@ int main(int argc, char const * argv[])
     }
     loop = SEQAN_PROTIMEDIFF(finalProcessing);
     std::cout << loop << "s" << std::endl;
-    clear(duplicationRateUnique);
-    clear(duplicationRate);
+    duplicationRateUnique.clear();
+    duplicationRate.clear();
 
     if (sort)
     {
@@ -445,9 +412,9 @@ int main(int argc, char const * argv[])
         else
             inFilename2 = outFilename;
 
-        BamFileIn bamFileIn3(seqan::toCString(inFilename2));
+        seqan::BamFileIn bamFileIn3(seqan::toCString(inFilename2));
         readHeader(header, bamFileIn3);
-        std::vector<BamAlignmentRecord> records;
+        std::vector<seqan::BamAlignmentRecord> records;
 
         while (!atEnd(bamFileIn3))
         {
@@ -455,10 +422,10 @@ int main(int argc, char const * argv[])
             records.emplace_back(std::move(record));
         }
         close(bamFileIn3);
-        std::sort(records.begin(), records.end(), [](const BamAlignmentRecord& lhs, const BamAlignmentRecord& rhs) {return CompareBamRecordKey<NoBarcode>()(BamRecordKey<NoBarcode>(lhs), BamRecordKey<NoBarcode>(rhs));});
+        std::sort(records.begin(), records.end(), [](const seqan::BamAlignmentRecord& lhs, const seqan::BamAlignmentRecord& rhs) {return CompareBamRecordKey<NoBarcode>()(BamRecordKey<NoBarcode>(lhs), BamRecordKey<NoBarcode>(rhs));});
 
         const std::string outFilename2 = getFilePrefix(inFilename2) + std::string("_sorted.bam");
-        SaveBam<BamFileIn> saveBam3(header, bamFileIn, outFilename2);
+        SaveBam<seqan::BamFileIn> saveBam3(header, bamFileIn, outFilename2);
         for (auto record : records)
             saveBam3.write(record);
         saveBam3.close();
@@ -475,6 +442,9 @@ int main(int argc, char const * argv[])
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
 #endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"));
+
+    std::vector<SingleStrandPosition> positionsVector;
+    collectForwardCandidates<OccurenceMapUnique, SingleStrandPosition>(occurenceMapUnique.begin(), occurenceMapUnique.end(), 10, 20, positionsVector);
 
 	return 0;
 }
