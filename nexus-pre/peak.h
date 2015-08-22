@@ -25,27 +25,51 @@ struct DoubleStrandPosition : SingleStrandPosition
 };
 
 template <typename TEdgeDistribution>
-unsigned slidingWindowScore(typename TEdgeDistribution::const_iterator startIt, typename TEdgeDistribution::const_iterator endIt,
-    const unsigned frequencyLimit, const unsigned widthLimit)
+int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt, typename TEdgeDistribution::const_iterator startIt, typename TEdgeDistribution::const_iterator endIt,
+    const unsigned widthLimit)
 {
-    TEdgeDistribution::key_type key = getKey(*startIt);
-    while(getKey(*startIt).)
-    return 0;
+    TEdgeDistribution::const_iterator runningIt = centerIt;
+    TEdgeDistribution::const_iterator prevRunningIt = runningIt;
+    int score = 0;
+    int distance = 0;
+    if (centerIt == startIt)
+        return 0;
+    bool ok = false;
+    while (runningIt != startIt && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= widthLimit)
+    {
+        if (isReverseStrand(*runningIt))
+            score -= getFrequency(*runningIt);
+        else
+            score += getFrequency(*runningIt);
+        prevRunningIt = runningIt--;
+    }
+    if (!ok) // score across chromosomes is not supported, return 0
+        return 0;
+    runningIt = std::next(centerIt, 1);
+    if (runningIt == endIt) // if centerIt is last before chromosome end, return 0 
+        return 0;
+    prevRunningIt = centerIt;
+    while (runningIt != endIt && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= widthLimit)
+    {
+        if (isReverseStrand(*runningIt))
+            score += getFrequency(*runningIt);
+        else
+            score -= getFrequency(*runningIt);
+        prevRunningIt = runningIt++;
+    }
+    if (!ok) // score across chromosomes is not supported
+        return 0;
+    return score;    // assume return value optimization
 }
 
 template <typename TEdgeDistribution, typename TPosition>
 void collectForwardCandidates(typename TEdgeDistribution::const_iterator startIt, typename TEdgeDistribution::const_iterator endIt, 
-    const unsigned frequencyLimit, const unsigned widthLimit, std::vector<TPosition>& candidatePositions)
+    const int scoreLimit, const unsigned widthLimit, std::vector<TPosition>& candidatePositions)
 {
     for (TEdgeDistribution::const_iterator it = startIt; it != endIt; ++it)
     {
-        if (!isReverseStrand(*it) && getFrequency(*it) > frequencyLimit)
-        {
-            TEdgeDistribution::const_iterator findResult = std::find_if(next(it, 1), next(it, widthLimit),
-                [frequencyLimit](auto element)->bool {return isReverseStrand(element) && (getFrequency(element) > frequencyLimit);});
-            if (findResult != next(it, widthLimit))
-                candidatePositions.push_back(getPosition<TPosition>(*it));
-        }
+        if (slidingWindowScore<TEdgeDistribution>(it, startIt, endIt, widthLimit) >= scoreLimit)
+            candidatePositions.push_back(getPosition<TPosition>(*it));
     }
 }
 

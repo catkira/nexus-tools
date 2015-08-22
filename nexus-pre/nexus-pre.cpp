@@ -368,9 +368,6 @@ int main(int argc, char const * argv[])
             duplicationRate.resize(val.second);
         ++duplicationRate[val.second - 1];
     });
-    occurenceMap.clear();
-    occurenceMapUnique.clear();
-
 
     std::fstream fs,fs2,fs3;
 #ifdef _MSC_VER
@@ -443,8 +440,14 @@ int main(int argc, char const * argv[])
 #endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"));
 
+    SEQAN_PROTIMESTART(peakCandidatesTime);
+    std::cout << "calculating peak candidates...";
     std::vector<SingleStrandPosition> positionsVector;
-    collectForwardCandidates<OccurenceMapUnique, SingleStrandPosition>(occurenceMapUnique.begin(), occurenceMapUnique.end(), 10, 20, positionsVector);
+    const int scoreLimit = 10;
+    collectForwardCandidates<OccurenceMapUnique, SingleStrandPosition>(occurenceMapUnique.begin(), occurenceMapUnique.end(), scoreLimit, 50, positionsVector);
+    loop = SEQAN_PROTIMEDIFF(peakCandidatesTime);
+    std::cout << loop << "s" << std::endl;
+    std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
 
 	return 0;
 }

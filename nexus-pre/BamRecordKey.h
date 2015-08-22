@@ -61,6 +61,19 @@ struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
     std::string barcode;
 };
 
+// returns false if keys are from different chromosomes
+template <typename THasBarcode>
+bool calculateDistance(const BamRecordKey<THasBarcode>& key1, const BamRecordKey<THasBarcode>& key2, int& distance)
+{
+    if ((key1.pos & 0xFFFFFFFF00000000) != (key2.pos & 0xFFFFFFFF00000000))
+    {
+        //distance = 0;
+        return false;
+    }
+    distance = (static_cast<__int32>(key2.pos) >> 1) - (static_cast<__int32>(key1.pos) >> 1);
+    return true;
+}
+
 bool isRev(const seqan::BamAlignmentRecord &record)
 {
     return (record.flag & 0x10) != 0;
