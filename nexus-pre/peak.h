@@ -37,11 +37,12 @@ struct PeakCandidate
 
 template <typename TEdgeDistribution>
 int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
-    const unsigned widthLimit, Range<TEdgeDistribution>& windowRange)
+    const unsigned widthLimit, const int halfScoreLimit, Range<TEdgeDistribution>& windowRange)
 {
     TEdgeDistribution::const_iterator runningIt = centerIt;
     windowRange.first = centerIt;
     int score = 0;
+    int half1score = 0;
     int distance = 0;
     if (centerIt == range.first)
         return 0;
@@ -59,6 +60,9 @@ int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt
     runningIt = std::next(centerIt, 1);
     if (runningIt == range.second) // if centerIt is last before chromosome end, return 0 
         return 0;
+    if (score < halfScoreLimit) // prevent matches where there is only a rising in the 2nd half
+        return 0;
+    half1score = score;
     windowRange.second = centerIt;
     while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= widthLimit)
     {
@@ -68,6 +72,11 @@ int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt
             score -= getFrequency(*runningIt);
         windowRange.second = runningIt++;
     }
+    if (score - half1score < halfScoreLimit)
+        return 0;
+    double ratio = static_cast<double>(score - half1score) / static_cast<double>(half1score);
+    if (ratio < 0.3 || ratio > 0.7)
+        return 0;
     if (!ok) // score across chromosomes is not supported
         return 0;
     return score;    // assume return value optimization
@@ -83,7 +92,7 @@ void collectForwardCandidates(Range<TEdgeDistribution> range,
     Range<TEdgeDistribution> slidingWindowRange, tempSlidingWindowRange;
     for (TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
     {
-        score = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, tempSlidingWindowRange);
+        score = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, scoreLimit/2, tempSlidingWindowRange);
         if (score >= scoreLimit && score > lastScore)
         {
             lastScore = score;
