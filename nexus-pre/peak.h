@@ -41,8 +41,8 @@ struct PeakCandidate
 };
 
 template <typename TEdgeDistribution>
-int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
-    const unsigned widthLimit, const int halfScoreLimit, Range<TEdgeDistribution>& windowRange)
+int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt, typename Range<TEdgeDistribution> range,
+    const unsigned widthLimit, const int halfScoreLimit, typename Range<TEdgeDistribution>& windowRange)
 {
     TEdgeDistribution::const_iterator runningIt = centerIt;
     windowRange.first = centerIt;
@@ -89,7 +89,7 @@ int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt
 
 template <typename TEdgeDistribution>
 void collectForwardCandidates(Range<TEdgeDistribution> range,
-    const int scoreLimit, const unsigned widthLimit, std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
+    const int scoreLimit, const unsigned widthLimit, typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
 {
     int tempScore = 0;
     int checkAhead = 0;
@@ -128,7 +128,7 @@ void collectForwardCandidates(Range<TEdgeDistribution> range,
 }
 
 template <typename TEdgeDistribution, typename TWriter, typename TContext>
-void forwardCandidatesToBed(const std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions, TWriter& writer, TContext& context)
+void forwardCandidatesToBed(const typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions, TWriter& writer, TContext& context)
 {
     TWriter::BedRecord bedRecord;
     for (const auto& element : candidatePositions)
