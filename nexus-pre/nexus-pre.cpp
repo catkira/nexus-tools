@@ -264,14 +264,16 @@ int main(int argc, char const * argv[])
             ++stats.totalMappedReads;
             const BamRecordKey<WithBarcode> key(record);
             const BamRecordKey<NoBarcode> pos(record);
-            if (keySet.find(key) != keySet.end())
+
+            const auto insertResult = keySet.insert(std::move(key));
+
+            if (!insertResult.second)  // element was not inserted because it existed already
             {
                 ++stats.removedReads;
             }
             else
             {
                 saveBam.write(record);
-                keySet.insert(key);
                 ++occurenceMapUnique[pos];
             }
             // every read is stored in occurenceMap
