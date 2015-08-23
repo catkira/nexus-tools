@@ -29,8 +29,12 @@ struct CompareBamRecordKey<WithBarcode>
     }
 };
 
+bool isRev(const seqan::BamAlignmentRecord &record)
+{
+    return (record.flag & 0x10) != 0;
+}
 
-template <typename THasBarcode>
+template <typename THasBarcode = NoBarcode>
 struct BamRecordKey
 {
     BamRecordKey(const uint64_t pos) : pos(pos) {};
@@ -73,11 +77,6 @@ bool calculateDistance(const BamRecordKey<THasBarcode>& key1, const BamRecordKey
     }
     distance = (static_cast<__int32>(key2.pos) >> 1) - (static_cast<__int32>(key1.pos) >> 1);
     return true;
-}
-
-bool isRev(const seqan::BamAlignmentRecord &record)
-{
-    return (record.flag & 0x10) != 0;
 }
 
 #endif

@@ -41,10 +41,10 @@ struct PeakCandidate
 };
 
 template <typename TEdgeDistribution>
-int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt, typename Range<TEdgeDistribution> range,
-    const unsigned widthLimit, const int halfScoreLimit, typename Range<TEdgeDistribution>& windowRange)
+int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
+    const unsigned widthLimit, const int halfScoreLimit, Range<TEdgeDistribution>& windowRange)
 {
-    TEdgeDistribution::const_iterator runningIt = centerIt;
+    typename TEdgeDistribution::const_iterator runningIt = centerIt;
     windowRange.first = centerIt;
     int score = 0;
     int half1score = 0;
@@ -95,7 +95,7 @@ void collectForwardCandidates(Range<TEdgeDistribution> range,
     int checkAhead = 0;
     PeakCandidate<TEdgeDistribution> peakCandidate;
     Range<TEdgeDistribution> tempSlidingWindowRange;
-    for (TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
+    for (typename TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
     {
         tempScore = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, scoreLimit/2, tempSlidingWindowRange);
         if (tempScore >= scoreLimit && peakCandidate.score == 0)    // scan until first match
@@ -130,7 +130,7 @@ void collectForwardCandidates(Range<TEdgeDistribution> range,
 template <typename TEdgeDistribution, typename TWriter, typename TContext>
 void forwardCandidatesToBed(const typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions, TWriter& writer, TContext& context)
 {
-    TWriter::BedRecord bedRecord;
+    typename TWriter::BedRecord bedRecord;
     for (const auto& element : candidatePositions)
     {
         bedRecord.rID = static_cast<int32_t>(element.centerIt->first.pos >> 32);
