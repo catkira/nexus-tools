@@ -30,6 +30,11 @@ struct DoubleStrandPosition : SingleStrandPosition
 template <typename TEdgeDistribution>
 struct PeakCandidate
 {
+    PeakCandidate() : score(0) {};
+    void clear()
+    {
+        score = 0;
+    }
     Range<TEdgeDistribution> range;
     typename TEdgeDistribution::const_iterator centerIt;
     int score;
@@ -75,8 +80,8 @@ int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt
     if (score - half1score < halfScoreLimit)
         return 0;
     double ratio = static_cast<double>(score - half1score) / static_cast<double>(half1score);
-    if (ratio < 0.3 || ratio > 0.7)
-        return 0;
+    //if (ratio < 0.3 || ratio > 0.7)
+    //    return 0;
     if (!ok) // score across chromosomes is not supported
         return 0;
     return score;    // assume return value optimization
@@ -86,27 +91,38 @@ template <typename TEdgeDistribution>
 void collectForwardCandidates(Range<TEdgeDistribution> range,
     const int scoreLimit, const unsigned widthLimit, std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
 {
-    int score = 0;
-    int lastScore = 0;
+    int tempScore = 0;
+    int checkAhead = 0;
     PeakCandidate<TEdgeDistribution> peakCandidate;
-    Range<TEdgeDistribution> slidingWindowRange, tempSlidingWindowRange;
+    Range<TEdgeDistribution> tempSlidingWindowRange;
     for (TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
     {
-        score = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, scoreLimit/2, tempSlidingWindowRange);
-        if (score >= scoreLimit && score > lastScore)
+        tempScore = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, scoreLimit/2, tempSlidingWindowRange);
+        if (tempScore >= scoreLimit && peakCandidate.score == 0)    // scan until first match
         {
-            lastScore = score;
-            slidingWindowRange = tempSlidingWindowRange;
+            checkAhead = widthLimit;    // start checkAhead
+            peakCandidate.score = tempScore;
+            peakCandidate.range = tempSlidingWindowRange;
+            peakCandidate.centerIt = it;
+        }
+        if(checkAhead > 0)  // after first match, checkAhead for better peak candidates
+        {
+            if (tempScore > peakCandidate.score)  // is the current candidate better
+            {
+                peakCandidate.score = tempScore;
+                peakCandidate.range = tempSlidingWindowRange;
+                peakCandidate.centerIt = it;
+            }
+            --checkAhead;
             continue;
         }
-        if (lastScore > 0)
+        if (peakCandidate.score > 0)    // checking finished
         {
-            peakCandidate.centerIt = it;
-            peakCandidate.range = range;
-            peakCandidate.score = score;
             candidatePositions.push_back(peakCandidate);
-            it = slidingWindowRange.second;
-            lastScore = 0;
+            it = peakCandidate.range.second;
+            tempScore = 0;
+            checkAhead = 0;
+            peakCandidate.clear();
         }
     }
 }

@@ -443,8 +443,8 @@ int main(int argc, char const * argv[])
     SEQAN_PROTIMESTART(peakCandidatesTime);
     std::cout << "calculating peak candidates...";
     std::vector<PeakCandidate<OccurenceMapUnique>> positionsVector;
-    const int scoreLimit = 20;
-    collectForwardCandidates<OccurenceMapUnique>(Range<OccurenceMapUnique>(occurenceMapUnique.begin(), occurenceMapUnique.end()), scoreLimit, 30, positionsVector);
+    const int scoreLimit = 40;
+    collectForwardCandidates<OccurenceMapUnique>(Range<OccurenceMapUnique>(occurenceMapUnique.begin(), occurenceMapUnique.end()), scoreLimit, 50, positionsVector);
     loop = SEQAN_PROTIMEDIFF(peakCandidatesTime);
     std::cout << loop << "s" << std::endl;
     std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
