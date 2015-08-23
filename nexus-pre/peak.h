@@ -41,7 +41,7 @@ struct PeakCandidate
 };
 
 template <typename TEdgeDistribution>
-int slidingWindowScore(typename const TEdgeDistribution::const_iterator centerIt, typename Range<TEdgeDistribution> range,
+int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt, typename Range<TEdgeDistribution> range,
     const unsigned widthLimit, const int halfScoreLimit, typename Range<TEdgeDistribution>& windowRange)
 {
     TEdgeDistribution::const_iterator runningIt = centerIt;
