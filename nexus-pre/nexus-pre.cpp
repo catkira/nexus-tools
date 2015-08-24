@@ -172,26 +172,25 @@ struct SaveBam
 };
 
 
-typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMapUnique;
-typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMap;
+typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>, CompareBamRecordKey<NoBarcode>> OccurenceMap;
 
-BamRecordKey<NoBarcode> getKey(const OccurenceMapUnique::value_type& val)
+BamRecordKey<NoBarcode> getKey(const OccurenceMap::value_type& val)
 {
     return val.first;
 }
 
-unsigned getFrequency(const OccurenceMapUnique::value_type& val)
+unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
 {
-    return val.second;
+    return val.second.second;
 }
 
-bool isReverseStrand(const OccurenceMapUnique::value_type& val)
+bool isReverseStrand(const OccurenceMap::value_type& val)
 {
     return (val.first.pos & 0x01) != 0;
 }
 
 template <typename TPosition>
-TPosition getPosition(const OccurenceMapUnique::value_type& val)
+TPosition getPosition(const OccurenceMap::value_type& val)
 {
     TPosition position;
     position.chromosomeID = static_cast<__int32>(val.first.pos >> 32);
@@ -238,10 +237,7 @@ int main(int argc, char const * argv[])
     const bool sort = seqan::isSet(parser, "s");
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
 
-    typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMapUnique;
-    typedef std::map<BamRecordKey<NoBarcode>, unsigned, CompareBamRecordKey<NoBarcode>> OccurenceMap;
     std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
-    OccurenceMapUnique occurenceMapUnique;
     OccurenceMap occurenceMap;
 
     Statistics stats;
@@ -255,6 +251,7 @@ int main(int argc, char const * argv[])
     
     SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
 
+
     while (!atEnd(bamFileIn))
     {
         readRecord(record, bamFileIn);
@@ -266,7 +263,7 @@ int main(int argc, char const * argv[])
             const BamRecordKey<NoBarcode> pos(record);
 
             const auto insertResult = keySet.insert(std::move(key));
-
+            OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
             if (!insertResult.second)  // element was not inserted because it existed already
             {
                 ++stats.removedReads;
@@ -274,10 +271,10 @@ int main(int argc, char const * argv[])
             else
             {
                 saveBam.write(record);
-                ++occurenceMapUnique[pos];
+                ++mapItem.second; // unique hits
             }
-            // every read is stored in occurenceMap
-            ++occurenceMap[pos];
+            // non unique hits
+            ++mapItem.first;
         }
     }
     saveBam.close();
@@ -302,8 +299,8 @@ int main(int argc, char const * argv[])
         while (!atEnd(bamFileIn2))
         {
             readRecord(record, bamFileIn2);
-            const auto occurenceMapUniqueIt =  occurenceMapUnique.find(BamRecordKey<NoBarcode>(record));
-            if (occurenceMapUniqueIt->second >= clusterSize)
+            const auto occurenceMapIt =  occurenceMap.find(BamRecordKey<NoBarcode>(record));
+            if (occurenceMapIt->second.second >= clusterSize)
             {
                 //sortedBamVector2.emplace_back(sortedBamVector[i]);
                 saveBam2.write(record);
@@ -334,7 +331,8 @@ int main(int argc, char const * argv[])
     seqan::BedRecord<seqan::Bed4> bedRecord;
 
     std::vector<unsigned> duplicationRateUnique;
-    std::for_each(occurenceMapUnique.begin(), occurenceMapUnique.end(), [&](const OccurenceMapUnique::value_type& val)
+    std::vector<unsigned> duplicationRate;
+    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMap::value_type& val)
     {
         if (bedOutputEnabled)
         {
@@ -345,31 +343,26 @@ int main(int argc, char const * argv[])
                 // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
                 bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) - 1; 
                 bedRecord.endPos = bedRecord.beginPos + 1;
-                bedRecord.name = std::to_string(-static_cast<int32_t>(val.second)); // abuse name as val parameter in BedGraph
+                bedRecord.name = std::to_string(-static_cast<int32_t>(val.second.second)); // abuse name as val parameter in BedGraph
                 saveBedReverseStrand.write(bedRecord);
             }
             else    // forward strand
             {
                 bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1);
                 bedRecord.endPos = bedRecord.beginPos + 1;
-                bedRecord.name = std::to_string(val.second); // abuse name as val parameter in BedGraph
+                bedRecord.name = std::to_string(val.second.second); // abuse name as val parameter in BedGraph
                 saveBedForwardStrand.write(bedRecord);
             }
         }
-        if (duplicationRateUnique.size() < val.second)
-            duplicationRateUnique.resize(val.second);
-        ++duplicationRateUnique[val.second - 1];
+        if (duplicationRateUnique.size() < val.second.second)
+            duplicationRateUnique.resize(val.second.second);
+        ++duplicationRateUnique[val.second.second - 1];
+        if (duplicationRate.size() < val.second.first)
+            duplicationRate.resize(val.second.first);
+        ++duplicationRate[val.second.first - 1];
     });
     saveBedForwardStrand.close();
     saveBedReverseStrand.close();
-
-    std::vector<unsigned> duplicationRate;
-    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMapUnique::value_type& val)
-    {
-        if (duplicationRate.size() < val.second)
-            duplicationRate.resize(val.second);
-        ++duplicationRate[val.second - 1];
-    });
 
     std::fstream fs,fs2,fs3;
 #ifdef _MSC_VER
@@ -444,16 +437,16 @@ int main(int argc, char const * argv[])
 
     SEQAN_PROTIMESTART(peakCandidatesTime);
     std::cout << "calculating peak candidates...";
-    std::vector<PeakCandidate<OccurenceMapUnique>> positionsVector;
+    std::vector<PeakCandidate<OccurenceMap>> positionsVector;
     const int scoreLimit = 40;
-    collectForwardCandidates<OccurenceMapUnique>(Range<OccurenceMapUnique>(occurenceMapUnique.begin(), occurenceMapUnique.end()), scoreLimit, 50, positionsVector);
+    collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, 50, positionsVector);
     loop = SEQAN_PROTIMEDIFF(peakCandidatesTime);
     std::cout << loop << "s" << std::endl;
     std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
 
     SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename + "_candidateScores");
     saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
-    forwardCandidatesToBed<OccurenceMapUnique, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
+    forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
 
 	return 0;
 }

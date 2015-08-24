@@ -55,9 +55,9 @@ int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt
     while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= widthLimit)
     {
         if (isReverseStrand(*runningIt))
-            score -= getFrequency(*runningIt);
+            score -= getUniqueFrequency(*runningIt);
         else
-            score += getFrequency(*runningIt);
+            score += getUniqueFrequency(*runningIt);
         windowRange.first = runningIt--;
     }
     if (!ok) // score across chromosomes is not supported, return 0
@@ -72,9 +72,9 @@ int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt
     while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= widthLimit)
     {
         if (isReverseStrand(*runningIt))
-            score += getFrequency(*runningIt);
+            score += getUniqueFrequency(*runningIt);
         else
-            score -= getFrequency(*runningIt);
+            score -= getUniqueFrequency(*runningIt);
         windowRange.second = runningIt++;
     }
     if (score - half1score < halfScoreLimit)
