@@ -15,8 +15,9 @@ flexbar_ml = "18";
 flexbar_tnum = "4";
 flexbarAdapterFilename = "../data/adapters.fa";
 flexbarBarcodeFilename = "../data/barcodes.fa";
-bowtieIndexFilename = "P:/bowtie-1.1.2/dm3"
-bowtieLocation = "P:/bowtie-1.1.2/bowtie"
+bowtieLocation = "P:/bowtie-1.1.2/"
+genomeFilename = "P:/git/chip-nexus/data/dm3/dm3.fasta"
+dataDir = os.path.abspath("../data/") + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
 parser.add_argument('--output', type=str)
@@ -42,7 +43,7 @@ inFilenamePrefix, inFileExtension = os.path.splitext(results.input_file)
 inFilenamePrefixWithoutPath = os.path.basename(results.input_file);
 inFilenamePrefixWithoutPath, temp = os.path.splitext(inFilenamePrefixWithoutPath)
 
-outputDir = os.path.abspath("../data/" + inFilenamePrefixWithoutPath) 
+outputDir = dataDir + inFilenamePrefixWithoutPath
 flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 
 args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-tnum", flexbar_tnum,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
@@ -57,11 +58,25 @@ if popen.returncode != 0:
  sys.exit()
 print flexbarOutputFilename + " created"
 
+head, tail = os.path.split(genomeFilename)
+genomeIndex, file_extension = os.path.splitext(tail)
+ 
+# check if bowtie index already exists
+if (os.path.isfile(dataDir + genomeIndex + ".1.ebwt") == False):
+ args = ("python",  bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, dataDir+genomeIndex)
+ popen = subprocess.Popen(args, stdout=subprocess.PIPE)
+ popen.wait()
+ output = popen.stdout.read()
+ print output
+ if popen.returncode != 0:
+  print "error"
+  sys.exit() 
+
 
 bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
 bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
-args = ("python", bowtieLocation, "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", bowtieIndexFilename, bowtieInputFilename, bowtieOutputFilename)
+args = ("python", bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", dataDir+genomeIndex, bowtieInputFilename, bowtieOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 popen.wait()
 output = popen.stdout.read()
