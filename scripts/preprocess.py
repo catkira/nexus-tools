@@ -42,24 +42,24 @@ inFilenamePrefix, inFileExtension = os.path.splitext(results.input_file)
 inFilenamePrefixWithoutPath = os.path.basename(results.input_file);
 inFilenamePrefixWithoutPath, temp = os.path.splitext(inFilenamePrefixWithoutPath)
 
-flexbarOutputFilename = os.path.abspath("../data/" + inFilenamePrefixWithoutPath) + "/" + inFilenamePrefixWithoutPath + inFileExtension
+outputDir = os.path.abspath("../data/" + inFilenamePrefixWithoutPath) 
+flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 
 args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-tnum", flexbar_tnum,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 #args = ("seqan_flexbar", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
-print "converting to BAM..."
-if not os.path.exists("../data/" + inFilenamePrefixWithoutPath):
- os.makedirs("../data/" + inFilenamePrefixWithoutPath)
+if not os.path.exists(outputDir):
+ os.makedirs(outputDir)
 print args
 popen = subprocess.Popen(args + tuple(leftovers))
 popen.wait()
 if popen.returncode != 0:
  print "error"
  sys.exit()
-print flexbarOutputFilename + "created"
+print flexbarOutputFilename + " created"
 
 
-bowtieInputFilename = os.path.abspath("../data/" + inFilenamePrefixWithoutPath) + "/" + inFilenamePrefixWithoutPath + "_Sample-1" + inFileExtension
-bowtieOutputFilename = "../data/" + inFilenamePrefixWithoutPath + "/" + inFilenamePrefixWithoutPath + ".sam"
+bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
+bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
 args = ("python", bowtieLocation, "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", bowtieIndexFilename, bowtieInputFilename, bowtieOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
@@ -78,3 +78,8 @@ print output
 if popen.returncode != 0:
  print "error"
  sys.exit()
+ 
+ 
+#cleanup
+os.remove(bowtieOutputFilename)
+os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + ".bam")
