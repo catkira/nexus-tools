@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <vector>
+#include <functional>
 
 template<typename TContainer>
 using Range = std::pair<typename TContainer::const_iterator, typename TContainer::const_iterator>;
@@ -37,22 +38,22 @@ struct PeakCandidate
     }
     Range<TEdgeDistribution> range;
     typename TEdgeDistribution::const_iterator centerIt;
-    int score;
+    double score;
 };
 
 template <typename TEdgeDistribution>
-int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
-    const unsigned widthLimit, const int halfScoreLimit, Range<TEdgeDistribution>& windowRange)
+double slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
+    const unsigned halfWindowWidth, const double scoreLimit, const double ratioTolerance, Range<TEdgeDistribution>& windowRange)
 {
     typename TEdgeDistribution::const_iterator runningIt = centerIt;
     windowRange.first = centerIt;
-    int score = 0;
-    int half1score = 0;
+    double score = 0;
+    double half1score = 0;
     int distance = 0;
     if (centerIt == range.first)
         return 0;
     bool ok = false;
-    while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= widthLimit)
+    while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= halfWindowWidth)
     {
         if (isReverseStrand(*runningIt))
             score -= getUniqueFrequency(*runningIt);
@@ -65,11 +66,11 @@ int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt
     runningIt = std::next(centerIt, 1);
     if (runningIt == range.second) // if centerIt is last before chromosome end, return 0 
         return 0;
-    if (score < halfScoreLimit) // prevent matches where there is only a rising in the 2nd half
+    if (score < scoreLimit/2) // prevent matches where there is only a rising in the 2nd half
         return 0;
     half1score = score;
     windowRange.second = centerIt;
-    while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= widthLimit)
+    while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= halfWindowWidth)
     {
         if (isReverseStrand(*runningIt))
             score += getUniqueFrequency(*runningIt);
@@ -77,30 +78,50 @@ int slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt
             score -= getUniqueFrequency(*runningIt);
         windowRange.second = runningIt++;
     }
-    if (score - half1score < halfScoreLimit)
+    if ((score - half1score) < scoreLimit/2)
         return 0;
     double ratio = static_cast<double>(score - half1score) / static_cast<double>(half1score);
-    //if (ratio < 0.3 || ratio > 0.7)
-    //    return 0;
+    if (ratio < (1 - ratioTolerance) || ratio > (1 + ratioTolerance))
+        return 0;
     if (!ok) // score across chromosomes is not supported
         return 0;
     return score;    // assume return value optimization
 }
 
-template <typename TEdgeDistribution>
-void collectForwardCandidates(Range<TEdgeDistribution> range,
-    const int scoreLimit, const unsigned widthLimit, typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
+template <typename TEdgeDistribution, typename TLambda>
+void plateauAdjustment(PeakCandidate<TEdgeDistribution>& peakCandidate, TLambda& calcScore)
 {
-    int tempScore = 0;
+    unsigned int plateauCount = 0;
+    Range<TEdgeDistribution> tempSlidingWindowRange;
+    for (typename TEdgeDistribution::const_iterator it = std::next(peakCandidate.centerIt,1); it != peakCandidate.range.second; ++it)
+    {
+        if (calcScore(it, tempSlidingWindowRange) > (peakCandidate.score * 0.9))
+            ++plateauCount;
+        else
+            break;
+    }
+    if (plateauCount > 0)
+        peakCandidate.centerIt = std::next(peakCandidate.centerIt, plateauCount / 2);
+}
+
+template <typename TEdgeDistribution>
+void collectForwardCandidates(const Range<TEdgeDistribution> range,
+    const double scoreLimit, const unsigned halfWindowWidth, const double ratioTolerance, typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
+{
+    double tempScore = 0;
     int checkAhead = 0;
+    int plateauCount = 0;
+    auto calcScore = [&range, halfWindowWidth, scoreLimit, ratioTolerance](auto it, auto& tempSlidingWindowRange) 
+        {return slidingWindowScore<TEdgeDistribution>(it, range, halfWindowWidth, scoreLimit, ratioTolerance, tempSlidingWindowRange);};
     PeakCandidate<TEdgeDistribution> peakCandidate;
     Range<TEdgeDistribution> tempSlidingWindowRange;
     for (typename TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
     {
-        tempScore = slidingWindowScore<TEdgeDistribution>(it, range, widthLimit, scoreLimit/2, tempSlidingWindowRange);
+        //tempScore = slidingWindowScore<TEdgeDistribution>(it, range, halfWindowWidth, scoreLimit, ratioTolerance, tempSlidingWindowRange);
+        tempScore = calcScore(it, tempSlidingWindowRange);
         if (tempScore >= scoreLimit && peakCandidate.score == 0)    // scan until first match
         {
-            checkAhead = widthLimit;    // start checkAhead
+            checkAhead = halfWindowWidth;    // start checkAhead
             peakCandidate.score = tempScore;
             peakCandidate.range = tempSlidingWindowRange;
             peakCandidate.centerIt = it;
@@ -118,6 +139,7 @@ void collectForwardCandidates(Range<TEdgeDistribution> range,
         }
         if (peakCandidate.score > 0)    // checking finished
         {
+            plateauAdjustment<TEdgeDistribution, decltype(calcScore)>(peakCandidate, calcScore);
             candidatePositions.push_back(peakCandidate);
             it = peakCandidate.range.second;
             tempScore = 0;
