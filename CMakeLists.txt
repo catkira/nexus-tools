@@ -43,7 +43,7 @@ if(LINUX_STATIC EQUAL ON)
 	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 	SET(BUILD_SHARED_LIBRARIES OFF)
 	SET(CMAKE_EXE_LINKER_FLAGS "-static")
-endif(LINUX_STATIC EQUALS ON)
+endif(LINUX_STATIC EQUAL ON)
 
 add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
