@@ -47,13 +47,14 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
 {
     typename TEdgeDistribution::const_iterator runningIt = centerIt;
     windowRange.first = centerIt;
+    scoreLimit;
     double score = 0;
     double half1score = 0;
     int distance = 0;
     if (centerIt == range.first)
         return 0;
     bool ok = false;
-    while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= halfWindowWidth)
+    while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
     {
         if (isReverseStrand(*runningIt))
             score -= getUniqueFrequency(*runningIt);
@@ -68,7 +69,7 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
         return 0;
     half1score = score;
     windowRange.second = centerIt;
-    while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= halfWindowWidth)
+    while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
     {
         if (isReverseStrand(*runningIt))
             score += getUniqueFrequency(*runningIt);
@@ -113,7 +114,6 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range,
 {
     double tempScore = 0;
     int checkAhead = 0;
-    int plateauCount = 0;
     auto calcScore = [&range, halfWindowWidth, scoreLimit, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange) 
         {return slidingWindowScore<TEdgeDistribution>(_it, range, halfWindowWidth, scoreLimit, ratioTolerance, _tempSlidingWindowRange);};
     PeakCandidate<TEdgeDistribution> peakCandidate;
