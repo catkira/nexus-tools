@@ -96,11 +96,11 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, performPeakCalling);
 
     seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
-        "t", "tolerance", "Score ratio tolerance between first and second half Window",
+        "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
         seqan::ArgParseOption::DOUBLE, "VALUE");
-    setDefaultValue(ratioOpt, 0.2);
+    setDefaultValue(ratioOpt, 2.0);
     setMinValue(ratioOpt, "0.01");
-    setMaxValue(ratioOpt, "0.5");
+    setMaxValue(ratioOpt, "100");
     addOption(parser, ratioOpt);
 
     seqan::ArgParseOption halfWindowSizeOpt = seqan::ArgParseOption(

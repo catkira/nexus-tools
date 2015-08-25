@@ -66,8 +66,6 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
     runningIt = std::next(centerIt, 1);
     if (runningIt == range.second) // if centerIt is last before chromosome end, return 0 
         return 0;
-    if (score < scoreLimit/2) // prevent matches where there is only a rising in the 2nd half
-        return 0;
     half1score = score;
     windowRange.second = centerIt;
     while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= halfWindowWidth)
@@ -78,11 +76,13 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
             score -= getUniqueFrequency(*runningIt);
         windowRange.second = runningIt++;
     }
-    if ((score - half1score) < scoreLimit/2)
-        return 0;
     double ratio = static_cast<double>(score - half1score) / static_cast<double>(half1score);
-    if (ratio < (1 - ratioTolerance) || ratio > (1 + ratioTolerance))
+    if (ratio < (1 - ratioTolerance) || ratio >(1 + ratioTolerance))
+    {
+        //if (getPosition(getKey(*centerIt)) > 2456589 && getPosition(getKey(*centerIt)) < 2456631)
+        //    std::cout << "ratio fail: " << ratio <<std::endl;
         return 0;
+    }
     if (!ok) // score across chromosomes is not supported
         return 0;
     return score;    // assume return value optimization
@@ -93,8 +93,11 @@ void plateauAdjustment(PeakCandidate<TEdgeDistribution>& peakCandidate, TLambda&
 {
     unsigned int plateauCount = 0;
     Range<TEdgeDistribution> tempSlidingWindowRange;
-    for (typename TEdgeDistribution::const_iterator it = std::next(peakCandidate.centerIt,1); it != peakCandidate.range.second; ++it)
+    auto prevIt = peakCandidate.centerIt;
+    for (typename TEdgeDistribution::const_iterator it = std::next(peakCandidate.centerIt,1); it != peakCandidate.range.second; prevIt = it++)
     {
+        //if (getPosition(getKey(*prevIt)) == getPosition(getKey(*it)))
+        //    continue;
         if (calcScore(it, tempSlidingWindowRange) > (peakCandidate.score * 0.9))
             ++plateauCount;
         else
@@ -111,13 +114,15 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range,
     double tempScore = 0;
     int checkAhead = 0;
     int plateauCount = 0;
-    auto calcScore = [&range, halfWindowWidth, scoreLimit, ratioTolerance](auto it, auto& tempSlidingWindowRange) 
-        {return slidingWindowScore<TEdgeDistribution>(it, range, halfWindowWidth, scoreLimit, ratioTolerance, tempSlidingWindowRange);};
+    auto calcScore = [&range, halfWindowWidth, scoreLimit, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange) 
+        {return slidingWindowScore<TEdgeDistribution>(_it, range, halfWindowWidth, scoreLimit, ratioTolerance, _tempSlidingWindowRange);};
     PeakCandidate<TEdgeDistribution> peakCandidate;
     Range<TEdgeDistribution> tempSlidingWindowRange;
-    for (typename TEdgeDistribution::const_iterator it = range.first; it != range.second; ++it)
+    auto prevIt = range.first;
+    for (typename TEdgeDistribution::const_iterator it = range.first; it != range.second; prevIt=it++)
     {
-        //tempScore = slidingWindowScore<TEdgeDistribution>(it, range, halfWindowWidth, scoreLimit, ratioTolerance, tempSlidingWindowRange);
+        //if (prevIt != it && getPosition(getKey(*prevIt)) == getPosition(getKey(*it)))   // check if the next object is on the same position, but only another strand
+        //    continue;
         tempScore = calcScore(it, tempSlidingWindowRange);
         if (tempScore >= scoreLimit && peakCandidate.score == 0)    // scan until first match
         {
@@ -139,7 +144,14 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range,
         }
         if (peakCandidate.score > 0)    // checking finished
         {
-            plateauAdjustment<TEdgeDistribution, decltype(calcScore)>(peakCandidate, calcScore);
+            if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
+            {
+                std::cout << "\npeak score: " << peakCandidate.score << std::endl;
+                std::cout << "pos before plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+            }
+            plateauAdjustment(peakCandidate, calcScore);
+            if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
+                std::cout << "pos after plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
             candidatePositions.push_back(peakCandidate);
             it = peakCandidate.range.second;
             tempScore = 0;

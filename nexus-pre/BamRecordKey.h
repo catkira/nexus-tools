@@ -48,6 +48,12 @@ struct BamRecordKey
     uint64_t pos;
 };
 
+template <typename THasBarcode>
+__int32 getPosition(const BamRecordKey<THasBarcode>& bamRecordKey)
+{
+    return static_cast<__int32>(bamRecordKey.pos) >> 1;
+}
+
 template <>
 struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
 {
