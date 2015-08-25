@@ -38,7 +38,8 @@ add_definitions (-DSEQAN_DATE="${SEQAN_DATE}")
 # Add CXX flags found by find_package (SeqAn).
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS} ${CXX14_CXX_FLAGS}")
 
-if(LINUX_STATIC EQUALS ON)
+if(LINUX_STATIC EQUAL ON)
+	message("building with linux static libs")
 	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
 	SET(BUILD_SHARED_LIBRARIES OFF)
 	SET(CMAKE_EXE_LINKER_FLAGS "-static")
