@@ -19,7 +19,15 @@ include (SeqAnContribs)
 set (SEQAN_USE_SEQAN_BUILD_SYSTEM TRUE CACHE INTERNAL "Use SeqAn build system." FORCE)
 include (SeqAnBuildSystem)
 set (SEQAN_ROOT_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}../seqan" CACHE INTERNAL "Root source directory." FORCE)
-SET(LINUX_STATIC OFF CACHE BOOL "include all libraries in the binary")
+option(LINUX_STATIC "build with static libs" OFF)
+
+if(LINUX_STATIC)
+	message("building with linux static libs")
+	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+	SET(BUILD_SHARED_LIBRARIES OFF)
+	SET(CMAKE_EXE_LINKER_FLAGS "-Bstatic -static-libgcc -static-libstdc++")
+endif(LINUX_STATIC)
+
 # include(include/seqan/CMakeLists.txt)
 seqan_build_system_init ()
 seqan_get_repository_info ()
@@ -37,13 +45,6 @@ add_definitions (-DSEQAN_DATE="${SEQAN_DATE}")
 
 # Add CXX flags found by find_package (SeqAn).
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS} ${CXX14_CXX_FLAGS}")
-
-if(LINUX_STATIC EQUAL ON)
-	message("building with linux static libs")
-	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-	SET(BUILD_SHARED_LIBRARIES OFF)
-	SET(CMAKE_EXE_LINKER_FLAGS "-static")
-endif(LINUX_STATIC EQUAL ON)
 
 add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
