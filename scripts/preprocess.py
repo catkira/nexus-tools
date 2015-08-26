@@ -14,9 +14,9 @@ flexbar_ol = "4";
 flexbar_fm = "22";
 flexbar_ml = "18";
 flexbar_tnum = "4";
-flexbarAdapterFilename = "../data/adapters.fa";
-flexbarBarcodeFilename = "../data/barcodes.fa";
-dataDir = os.path.abspath("../data/") + "/"
+flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
+flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
+dataDir = os.getcwd() + "/data/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
 parser.add_argument('--output', type=str)
@@ -99,7 +99,10 @@ else:
  bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
 bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
-args = ("python", bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", dataDir+genomeIndex, bowtieInputFilename, bowtieOutputFilename)
+if(platform.system() == "Linux" or platform.system() == "Linux2"):
+ args = (bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", dataDir+genomeIndex, bowtieInputFilename, bowtieOutputFilename)
+else:
+ args = ("python", bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", dataDir+genomeIndex, bowtieInputFilename, bowtieOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 popen.wait()
 output = popen.stdout.read()
