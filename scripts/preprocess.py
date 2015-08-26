@@ -80,11 +80,12 @@ head, tail = os.path.split(genomeFilename)
 genomeIndex, file_extension = os.path.splitext(tail)
  
 # check if bowtie index already exists
-if (os.path.isfile(dataDir + genomeIndex + ".1.ebwt") == False):
+genomeIndexFile = os.path.dirname(genomeFilename) + "/" + genomeIndex;
+if (os.path.isfile(genomeIndexFile + ".1.ebwt") == False):
  if(platform.system() == "Linux" or platform.system() == "Linux2"):
-  args = (bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, dataDir+genomeIndex)
+  args = (bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, genomeIndexFile)
  else:
-  args = ("python",  bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, dataDir+genomeIndex)
+  args = ("python",  bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, genomeIndexFile)
  popen = subprocess.Popen(args, stdout=subprocess.PIPE)
  popen.wait()
  output = popen.stdout.read()
@@ -100,9 +101,9 @@ else:
 bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
 if(platform.system() == "Linux" or platform.system() == "Linux2"):
- args = (bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", dataDir+genomeIndex, bowtieInputFilename, bowtieOutputFilename)
+ args = (bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
 else:
- args = ("python", bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", dataDir+genomeIndex, bowtieInputFilename, bowtieOutputFilename)
+ args = ("python", bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 popen.wait()
 output = popen.stdout.read()
