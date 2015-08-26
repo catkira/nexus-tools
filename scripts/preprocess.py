@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 
 import sys
 import os.path
@@ -15,19 +15,25 @@ flexbar_ml = "18";
 flexbar_tnum = "4";
 flexbarAdapterFilename = "../data/adapters.fa";
 flexbarBarcodeFilename = "../data/barcodes.fa";
-bowtieLocation = "P:/bowtie-1.1.2/"
-genomeFilename = "P:/git/chip-nexus/data/dm3/dm3.fasta"
+bowtieLocation = ""
 dataDir = os.path.abspath("../data/") + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
 parser.add_argument('--output', type=str)
 parser.add_argument('input_file')
+parser.add_argument('--data_dir', type=str)
+parser.add_argument('genome', type=str);
 
 results, leftovers = parser.parse_known_args()
 print leftovers
 
-print results.input_file
+print "Reads: " + results.input_file
+print "Genome: " + results.genome
 #print results.output
+if results.data_dir is not None:
+ dataDir = os.path.abspath(results.data_dir) + "/"
+
+genomeFilename = results.genome;
 
 if results.output is not None:
  outFilenamePrefix, file_extension = os.path.splitext(results.output)
@@ -84,8 +90,20 @@ print output
 if popen.returncode != 0:
  print "error"
  sys.exit()
+ 
+#nexus-pre
+nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
 
-args = ("python", "bam_indexer.py", bowtieOutputFilename)
+args = ("nexus-pre", bowtieOutputFilename,  "-p", "-b")
+popen = subprocess.Popen(args, stdout=subprocess.PIPE)
+popen.wait()
+output = popen.stdout.read()
+print output
+if popen.returncode != 0:
+ print "error"
+ sys.exit()
+
+args = ("python", "bam_indexer.py", nexusOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 popen.wait()
 output = popen.stdout.read()
