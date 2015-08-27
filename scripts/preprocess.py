@@ -22,7 +22,7 @@ parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapp
 parser.add_argument('--exo', action='store_true')
 parser.add_argument('--bowtie_location', nargs='?', default = "")
 parser.add_argument('input_file')
-parser.add_argument('--data_dir', type=str)
+parser.add_argument('--output_dir', type=str)
 parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
@@ -31,8 +31,8 @@ print leftovers
 print "Reads: " + results.input_file
 print "Genome: " + results.genome
 #print results.output
-if results.data_dir is not None:
- dataDir = os.path.abspath(results.data_dir) + "/"
+if results.output_dir is not None:
+ dataDir = os.path.abspath(results.output_dir) + "/"
 
 genomeFilename = results.genome
 bowtieLocation = results.bowtie_location
@@ -43,7 +43,7 @@ if(platform.system() == "Windows" and results.bowtie_location == ""):
 
 inputFile = results.input_file
 
-inFilenamePrefix, inFileExtension = results.input_file.split(os.extsep, 1)
+inFilenamePrefix, inFileExtension = os.path.abspath(results.input_file).split(os.extsep, 1)
 inFileExtension = "." + inFileExtension
 inFilenamePrefixWithoutPath = os.path.basename(results.input_file);
 inFilenamePrefixWithoutPath, temp = inFilenamePrefixWithoutPath.split(os.extsep, 1)
@@ -130,5 +130,5 @@ if popen.returncode != 0:
  
  
 #cleanup
-os.remove(bowtieOutputFilename)
+#os.remove(bowtieOutputFilename)
 os.remove(nexusOutputFilename)
