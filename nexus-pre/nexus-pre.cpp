@@ -25,45 +25,48 @@ struct Statistics
     unsigned removedReads = 0;
     unsigned totalSamePositionReads = 0;
     unsigned readsAfterFiltering = 0;
-
+    unsigned int couldNotMap = 0;
+    unsigned int couldNotMapUniquely = 0;
 };
 
-void printStatistics(const Statistics &stats, const bool clusterFiltering)
+template <typename TStream>
+void printStatistics(TStream &stream, const Statistics &stats, const bool clusterFiltering, const bool tabbed=false)
 {
-    std::cout << "Total reads                          : " << stats.totalReads << std::endl;
-    std::cout << "Total mapped reads                   : " << stats.totalMappedReads << std::endl;
-    std::cout << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
-    std::cout << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" <<std::endl;
-    if (clusterFiltering)
-        std::cout << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
-}
-
-// Todo: remove bad copypaste code
-void printStatistics(std::fstream &fs, const Statistics &stats, const bool clusterFiltering)
-{
-    fs << "Total reads                          : " << stats.totalReads << std::endl;
-    fs << "Total mapped reads                   : " << stats.totalMappedReads << std::endl;
-    fs << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
-    fs << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
-    if (clusterFiltering)
-        fs << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    if (tabbed)
+    {
+        stream << "Total reads" << "\t"<< stats.totalReads << std::endl;
+        stream << "Mapped reads" << "\t" << stats.totalMappedReads << std::endl;
+        stream << "Non mappable reads" << "\t" << stats.couldNotMap << std::endl;
+        stream << "Non uniquely mappable reads" << "\t" << stats.couldNotMapUniquely << std::endl;
+        stream << "After barcode filtering" << "\t" << stats.totalMappedReads - stats.removedReads << "\t" << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "Total duplet reads" << "\t" << stats.totalSamePositionReads << std::endl;
+        if (clusterFiltering)
+            stream << "After cluster filtering" << "\t" << stats.readsAfterFiltering << "\t" << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    }
+    else
+    {
+        stream << "Total reads                          : " << stats.totalReads << std::endl;
+        stream << "Mapped reads                         : " << stats.totalMappedReads << std::endl;
+        stream << "Non mappable reads                   : " << stats.couldNotMap << std::endl;
+        stream << "Non uniquely mappable reads          : " << stats.couldNotMapUniquely << std::endl;
+        stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
+        if (clusterFiltering)
+            stream << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    }
 }
 
 seqan::ArgumentParser buildParser(void)
 {
     seqan::ArgumentParser parser;
 
-    setCategory(parser, "NGS Quality Control");
-    setShortDescription(parser, "The SeqAn Filtering Toolkit of seqan_flexbar.");
+    setCategory(parser, "Chip Nexus/Exo Data Processing");
+    setShortDescription(parser, "Preprocessing Pipeline for Chip-Nexus and Chip-Exo data");
     addUsageLine(parser, " \\fI<READ_FILE1>\\fP \\fI<[READ_FILE2]>\\fP \\fI[OPTIONS]\\fP");
     addDescription(parser,
-        "This program is a sub-routine of SeqAn-Flexbar (a reimplementation of"
-        " the original flexbar[1]) and can be used to filter reads and apply "
-        "sequence independent trimming options");
+        "");
 
-    addDescription(parser, "[1] Dodt, M.; Roehr, J.T.; Ahmed, R.; Dieterich, "
-        "C.  FLEXBAR—Flexible Barcode and Adapter Processing for "
-        "Next-Generation Sequencing Platforms. Biology 2012, 1, 895-905.");
+    addDescription(parser, "");
 
     seqan::setVersion(parser, SEQAN_APP_VERSION " [" SEQAN_REVISION "]");
     setDate(parser, SEQAN_DATE);
@@ -273,31 +276,39 @@ int main(int argc, char const * argv[])
     
     SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
 
+    unsigned tagID = 0;
 
     while (!atEnd(bamFileIn))
     {
         readRecord(record, bamFileIn);
         ++stats.totalReads;
-        if (record.flag == 0x00 || record.flag == 0x10)
+        const seqan::BamTagsDict tags(record.tags);
+        if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
         {
-            ++stats.totalMappedReads;
-            const BamRecordKey<WithBarcode> key(record);
-            const BamRecordKey<NoBarcode> pos(record);
-
-            const auto insertResult = keySet.insert(std::move(key));
-            OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
-            if (!insertResult.second)  // element was not inserted because it existed already
-            {
-                ++stats.removedReads;
-            }
+            __int32 tagValue = 0;
+            extractTagValue(tagValue, tags, tagID);
+            if (tagValue == 0)
+                ++stats.couldNotMap;
             else
-            {
-                saveBam.write(record);
-                ++mapItem.second; // unique hits
-            }
-            // non unique hits
-            ++mapItem.first;
+                ++stats.couldNotMapUniquely;
         }
+        if (record.flag != 0x00 && record.flag != 0x10)
+            continue;
+        
+        ++stats.totalMappedReads;
+        const BamRecordKey<WithBarcode> key(record);
+        const BamRecordKey<NoBarcode> pos(record);
+        const auto insertResult = keySet.insert(std::move(key));
+        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
+        if (!insertResult.second)  // element was not inserted because it existed already
+            ++stats.removedReads;
+        else
+        {
+            saveBam.write(record);
+            ++mapItem.second; // unique hits
+        }
+        // non unique hits
+        ++mapItem.first;
     }
     saveBam.close();
     seqan::clear(keySet);
@@ -412,13 +423,13 @@ int main(int argc, char const * argv[])
     duplicationRateUnique.clear();
     duplicationRate.clear();
 
-    printStatistics(stats, seqan::isSet(parser, "f"));
+    printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
 #ifdef _MSV_VER
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
 #else
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
 #endif
-    printStatistics(fs3, stats, seqan::isSet(parser, "f"));
+    printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
 
     if (peakCallingEnabled)
     {
@@ -431,7 +442,7 @@ int main(int argc, char const * argv[])
         getOptionValue(halfWindowWidth, parser, "w");
         getOptionValue(ratioTolerance, parser, "t");
 
-        std::cout << std::endl;
+        std::cout << std::endl << std::endl;
         std::cout << "Settings for peak calling" << std::endl;
         std::cout << "half window size: " << halfWindowWidth << std::endl;
         std::cout << "score limit: " << scoreLimit << std::endl;
