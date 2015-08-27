@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+﻿#!/usr/bin/env python
 
 import sys
 import os.path
@@ -134,5 +134,9 @@ if popen.returncode != 0:
 if results.clean:
  print "deleting intermediate files..."
  os.remove(bowtieOutputFilename)
- os.remove(flexbarOutputFilename)
+ if results.exo:
+  os.remove(flexbarOutputFilename)
+ else:
+  os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension)
+  os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_unidentified" + inFileExtension)
  os.remove(nexusOutputFilename)
