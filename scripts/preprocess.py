@@ -55,6 +55,7 @@ inputFile = results.input_file
 inFilenamePrefix, inFileExtension = os.path.splitext(results.input_file)
 inFilenamePrefixWithoutPath = os.path.basename(results.input_file);
 inFilenamePrefixWithoutPath, temp = os.path.splitext(inFilenamePrefixWithoutPath)
+inFilenamePrefixWithoutPath, temp = os.path.splitext(inFilenamePrefixWithoutPath)
 
 outputDir = dataDir + inFilenamePrefixWithoutPath
 flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
@@ -125,7 +126,7 @@ if popen.returncode != 0:
  sys.exit()
 
 if(platform.system() == "Linux" or platform.system() == "Linux2"):
- args = ("bam_indexer.py", nexusOutputFilename)
+ args = (os.path.dirname(os.path.realpath(__file__)) + "/bam_indexer.py", nexusOutputFilename)
 else:
  args = ("python", "bam_indexer.py", nexusOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
