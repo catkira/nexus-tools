@@ -16,15 +16,15 @@ flexbar_ml = "18";
 flexbar_tnum = "4";
 flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
 flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
-dataDir = os.getcwd() + "/data/"
+dataDir = os.getcwd() + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
 parser.add_argument('--output', type=str)
 parser.add_argument('--exo', action='store_true')
-parser.add_argument('--bowtie_location', nargs='?')
+parser.add_argument('--bowtie_location', nargs='?', default = "")
 parser.add_argument('input_file')
 parser.add_argument('--data_dir', type=str)
-parser.add_argument('genome', type=str);
+parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
 print leftovers
@@ -36,9 +36,9 @@ if results.data_dir is not None:
  dataDir = os.path.abspath(results.data_dir) + "/"
 
 genomeFilename = results.genome
-bowtieLocation = os.path.abspath(results.bowtie_location) + "/"
+bowtieLocation = results.bowtie_location
 
-if(platform.system() == "Windows" and bowtieLocation == None):
+if(platform.system() == "Windows" and results.bowtie_location == ""):
  print "Bowtie location is required under windows"
  sys.exit()
 
@@ -124,7 +124,10 @@ if popen.returncode != 0:
  print "error"
  sys.exit()
 
-args = ("python", "bam_indexer.py", nexusOutputFilename)
+if(platform.system() == "Linux" or platform.system() == "Linux2"):
+ args = ("bam_indexer.py", nexusOutputFilename)
+else:
+ args = ("python", "bam_indexer.py", nexusOutputFilename)
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 popen.wait()
 output = popen.stdout.read()
