@@ -19,7 +19,6 @@ flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data
 dataDir = os.getcwd() + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
-parser.add_argument('--output', type=str)
 parser.add_argument('--exo', action='store_true')
 parser.add_argument('--bowtie_location', nargs='?', default = "")
 parser.add_argument('input_file')
@@ -42,20 +41,12 @@ if(platform.system() == "Windows" and results.bowtie_location == ""):
  print "Bowtie location is required under windows"
  sys.exit()
 
-if results.output is not None:
- outFilenamePrefix, file_extension = os.path.splitext(results.output)
- outFilenamePrefix = os.path.dirname(results.input_file)+ "/" +outFilenamePrefix;
-else:
- outFilenamePrefix, file_extension = os.path.splitext(results.input_file)
- outFilenamePrefix += ""
-#print "output file: " + outFilenamePrefix + ".bam"
-
 inputFile = results.input_file
 
-inFilenamePrefix, inFileExtension = os.path.splitext(results.input_file)
+inFilenamePrefix, inFileExtension = results.input_file.split(os.extsep, 1)
+inFileExtension = "." + inFileExtension
 inFilenamePrefixWithoutPath = os.path.basename(results.input_file);
-inFilenamePrefixWithoutPath, temp = os.path.splitext(inFilenamePrefixWithoutPath)
-inFilenamePrefixWithoutPath, temp = os.path.splitext(inFilenamePrefixWithoutPath)
+inFilenamePrefixWithoutPath, temp = inFilenamePrefixWithoutPath.split(os.extsep, 1)
 
 outputDir = dataDir + inFilenamePrefixWithoutPath
 flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
