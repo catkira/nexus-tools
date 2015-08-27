@@ -20,13 +20,13 @@ dataDir = os.getcwd() + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
 parser.add_argument('--exo', action='store_true')
+parser.add_argument('--clean', action='store_true')
 parser.add_argument('--bowtie_location', nargs='?', default = "")
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
 parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
-print leftovers
 
 print "Reads: " + results.input_file
 print "Genome: " + results.genome
@@ -41,14 +41,16 @@ if(platform.system() == "Windows" and results.bowtie_location == ""):
  print "Bowtie location is required under windows"
  sys.exit()
 
-inputFile = results.input_file
+inputFile = os.path.abspath(results.input_file)
 
-inFilenamePrefix, inFileExtension = os.path.abspath(results.input_file).split(os.extsep, 1)
+temp, inFileExtension = inputFile.split(os.extsep, 1)
+inFileExtension, temp = os.path.splitext(inFileExtension) # remove .gz if its a fastq.gz file
 inFileExtension = "." + inFileExtension
-inFilenamePrefixWithoutPath = os.path.basename(results.input_file);
+inFilenamePrefixWithoutPath = os.path.basename(inputFile)
 inFilenamePrefixWithoutPath, temp = inFilenamePrefixWithoutPath.split(os.extsep, 1)
 
 outputDir = dataDir + inFilenamePrefixWithoutPath
+#output has to be fastq format, because bowtie does not support fastq.gz
 flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 
 if results.exo:
@@ -60,7 +62,6 @@ else:
  #args = ("seqan_flexbar", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
-print args
 popen = subprocess.Popen(args + tuple(leftovers))
 popen.wait()
 if popen.returncode != 0:
@@ -130,5 +131,8 @@ if popen.returncode != 0:
  
  
 #cleanup
-#os.remove(bowtieOutputFilename)
-os.remove(nexusOutputFilename)
+if results.clean:
+ print "deleting intermediate files..."
+ os.remove(bowtieOutputFilename)
+ os.remove(flexbarOutputFilename)
+ os.remove(nexusOutputFilename)
