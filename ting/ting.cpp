@@ -45,7 +45,7 @@ seqan::ArgumentParser buildParser(void)
 
     setCategory(parser, "Ting");
     setShortDescription(parser, "Peak Caller for Chip-Nexus and Chip-Exo data");
-    addUsageLine(parser, " \\fI<READ_FILE1> \\fI[OPTIONS]\\fP");
+    addUsageLine(parser, " \\fI<READ_FILE>  \\fI<OUTPUT_FILE> \\fI[OPTIONS]\\fP");
     addDescription(parser,
         "");
 
@@ -152,14 +152,23 @@ int main(int argc, char const * argv[])
 
     // Check if one or two input files (single or paired-end) were given.
     int fileCount = getArgumentValueCount(parser, 0);
-    if (fileCount != 1) 
+    if (fileCount == 0) 
     {
         printShortHelp(parser);
         return 1;
     }
 
+    seqan::CharString fileName2;
+    std::string outFilename;
+    if (fileCount == 2)
+    {
+        getArgumentValue(fileName2, parser, 0, 1);
+        outFilename = seqan::toCString(fileName2);
+    }
+    else
+        outFilename = getFilePrefix(argv[1]) + std::string("_candidateScores");
+
     unsigned numRecords;
-    getOptionValue(numRecords, parser, "r");
 
     seqan::CharString fileName1;
     getArgumentValue(fileName1, parser, 0, 0);
@@ -199,10 +208,10 @@ int main(int argc, char const * argv[])
         ++mapItem.first; // non unique hits
     }
     seqan::clear(keySet);
-    printStatistics(std::cout, stats);
 
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
+    printStatistics(std::cout, stats);
 
     SEQAN_PROTIMESTART(peakCandidatesTime);
 
@@ -213,7 +222,7 @@ int main(int argc, char const * argv[])
     getOptionValue(halfWindowWidth, parser, "w");
     getOptionValue(ratioTolerance, parser, "t");
 
-    std::cout << std::endl << std::endl;
+    std::cout << std::endl;
     std::cout << "Settings for peak calling" << std::endl;
     std::cout << "half window size: " << halfWindowWidth << std::endl;
     std::cout << "score limit: " << scoreLimit << std::endl;
@@ -227,7 +236,7 @@ int main(int argc, char const * argv[])
     std::cout << loop << "s" << std::endl;
     std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
 
-    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(getFilePrefix(seqan::toCString(fileName1)) + "_candidateScores");
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename);
     saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
     forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
 

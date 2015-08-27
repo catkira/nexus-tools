@@ -144,14 +144,14 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range,
         }
         if (peakCandidate.score > 0)    // checking finished
         {
-            if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
-            {
-                std::cout << "\npeak score: " << peakCandidate.score << std::endl;
-                std::cout << "pos before plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
-            }
+            //if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
+            //{
+            //    std::cout << "\npeak score: " << peakCandidate.score << std::endl;
+            //    std::cout << "pos before plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+            //}
             plateauAdjustment(peakCandidate, calcScore);
-            if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
-                std::cout << "pos after plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+            //if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
+            //    std::cout << "pos after plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
             candidatePositions.push_back(peakCandidate);
             it = peakCandidate.range.second;
             tempScore = 0;
