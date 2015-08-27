@@ -144,34 +144,6 @@ std::string getFilePrefix(const std::string& fileName, const bool withPath = tru
     return fileName.substr(found2 + 1, found - found2);
 }
 
-template <typename TBedRecord>
-struct SaveBed
-{
-    using BedRecord = TBedRecord;
-    SaveBed(const std::string& filename) : bedFileOut()
-    {
-        if (!open(bedFileOut, (filename + ".bed").c_str()))
-        {
-            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
-            return;
-        }
-    }
-    void write(TBedRecord& record)
-    {
-        writeRecord(bedFileOut, record);
-    }
-    void writeHeader(const seqan::CharString& header)
-    {
-        seqan::write(bedFileOut.iter, header);
-    }
-    void close()
-    {
-        seqan::close(bedFileOut);
-    }
-    seqan::BedFileOut bedFileOut;
-};
-
-
 template <typename TContext>
 struct SaveBam
 {

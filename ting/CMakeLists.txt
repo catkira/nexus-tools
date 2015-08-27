@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.1)
-project(nexus-pre)
-message (STATUS "Configuring nexus-pre")
+project(ting)
+message (STATUS "Configuring ting")
 
 
 
@@ -42,7 +42,7 @@ INCLUDE_DIRECTORIES(${SEQAN_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${CMAKE_CURRENT_S
 		
 # Output
     SET(ALLSRC ${Sources} ${Headers})
-    ADD_EXECUTABLE(nexus-pre ${ALLSRC})
+    ADD_EXECUTABLE(ting ${ALLSRC})
 	
-    target_link_libraries (nexus-pre ${SEQAN_LIBRARIES} ${Boost_LIBRARIES} )
+    target_link_libraries (ting ${SEQAN_LIBRARIES} ${Boost_LIBRARIES} )
 				  

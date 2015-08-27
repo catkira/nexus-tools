@@ -177,5 +177,32 @@ void forwardCandidatesToBed(const typename std::vector<PeakCandidate<TEdgeDistri
     }
 }
 
+template <typename TBedRecord>
+struct SaveBed
+{
+    using BedRecord = TBedRecord;
+    SaveBed(const std::string& filename) : bedFileOut()
+    {
+        if (!open(bedFileOut, (filename + ".bed").c_str()))
+        {
+            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
+            return;
+        }
+    }
+    void write(TBedRecord& record)
+    {
+        writeRecord(bedFileOut, record);
+    }
+    void writeHeader(const seqan::CharString& header)
+    {
+        seqan::write(bedFileOut.iter, header);
+    }
+    void close()
+    {
+        seqan::close(bedFileOut);
+    }
+    seqan::BedFileOut bedFileOut;
+};
+
 
 #endif  // #ifndef PEAK_H_
