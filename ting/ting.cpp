@@ -178,8 +178,8 @@ int main(int argc, char const * argv[])
 
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
 
-    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
     OccurenceMap occurenceMap;
+    auto occurenceMapIt = occurenceMap.begin();
 
     Statistics stats;
 
@@ -195,19 +195,11 @@ int main(int argc, char const * argv[])
         readRecord(record, bamFileIn);
         ++stats.totalReads;
         
-        const BamRecordKey<WithBarcode> key(record);
-        const BamRecordKey<NoBarcode> pos(record);
-        const auto insertResult = keySet.insert(std::move(key));
-        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
-        if (!insertResult.second)  // element was not inserted because it existed already
+        const BamRecordKey<NoBarcode> key(record);
+        const auto n = ++occurenceMap[key].second;
+        if (n > 1)
             ++stats.samePositionReads;
-        else
-        {
-            ++mapItem.second; // unique hits
-        }
-        ++mapItem.first; // non unique hits
     }
-    seqan::clear(keySet);
 
     double loop = SEQAN_PROTIMEDIFF(loopTime);
     std::cout << loop << "s" << std::endl;
