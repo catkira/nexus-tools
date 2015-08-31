@@ -13,7 +13,6 @@ flexbar_er = "0.2";
 flexbar_ol = "4";
 flexbar_fm = "22";
 flexbar_ml = "18";
-flexbar_tnum = "4";
 flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
 flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
@@ -21,7 +20,10 @@ dataDir = os.getcwd() + "/"
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
 parser.add_argument('--exo', action='store_true')
 parser.add_argument('--clean', action='store_true')
+parser.add_argument('--overwrite', action='store_true')
+parser.add_argument('--verbose', action='store_true')
 parser.add_argument('--bowtie_location', nargs='?', default = "")
+parser.add_argument('--num_threads', nargs='?', default = "4")
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
 parser.add_argument('genome', type=str)
@@ -35,7 +37,7 @@ if results.output_dir is not None:
  dataDir = os.path.abspath(results.output_dir) + "/"
 
 genomeFilename = results.genome
-bowtieLocation = results.bowtie_location
+bowtieLocation = results.bowtie_location + "/"
 
 if(platform.system() == "Windows" and results.bowtie_location == ""):
  print "Bowtie location is required under windows"
@@ -54,20 +56,31 @@ outputDir = dataDir + inFilenamePrefixWithoutPath
 flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 
 if results.exo:
- print "processing Chip-Exo data"
- args = ("seqan_flexbar", results.input_file, "-tt", "-t", "-ss", "-tnum", flexbar_tnum,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 else:
- print "processing Chip-Nexus data"
- args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-tnum", flexbar_tnum,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
+bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
+
+
+if results.exo:
+ args = ("seqan_flexbar", results.input_file, "-tt", "-t", "-ss", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+else:
+ args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
  #args = ("seqan_flexbar", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
-popen = subprocess.Popen(args + tuple(leftovers))
-popen.wait()
-if popen.returncode != 0:
- print "error"
- sys.exit()
-print flexbarOutputFilename + " created"
+if (os.path.isfile(bowtieInputFilename) == False or results.overwrite == True):
+    print "Filtering pre-mapping barcodes and trimming adapters..."
+    if results.verbose == True:
+        popen = subprocess.Popen(args + tuple(leftovers))
+    else:
+        popen = subprocess.Popen(args + tuple(leftovers), stdout=subprocess.PIPE)
+    popen.wait()
+    if popen.returncode != 0:
+     print "error"
+     sys.exit()
+    if results.verbose == True:
+        print flexbarOutputFilename + " created"
 
 head, tail = os.path.split(genomeFilename)
 genomeIndex, file_extension = os.path.splitext(tail)
@@ -82,61 +95,62 @@ if (os.path.isfile(genomeIndexFile + ".1.ebwt") == False):
  popen = subprocess.Popen(args, stdout=subprocess.PIPE)
  popen.wait()
  output = popen.stdout.read()
- print output
+ if results.verbose == True:
+    print output
  if popen.returncode != 0:
   print "error"
   sys.exit() 
 
-if results.exo:
- bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
-else:
- bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
-bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
-if(platform.system() == "Linux" or platform.system() == "Linux2"):
- args = (bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
-else:
- args = ("python", bowtieLocation + "bowtie", "-S", "-p", "4", "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
-popen = subprocess.Popen(args, stdout=subprocess.PIPE)
-popen.wait()
-output = popen.stdout.read()
-print output
-if popen.returncode != 0:
- print "error"
- sys.exit()
+if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
+    if(platform.system() == "Linux" or platform.system() == "Linux2"):
+     args = (bowtieLocation + "bowtie", "-S", "-p", results.num_threads, "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
+    else:
+     args = ("python", bowtieLocation + "bowtie", "-S", "-p", results.num_threads, "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
+    print "Mapping reads..."
+    popen = subprocess.Popen(args, stdout=subprocess.PIPE)
+    popen.wait()
+    output = popen.stdout.read()
+    if results.verbose == True:
+        print output
+    if popen.returncode != 0:
+     print "error"
+     sys.exit()
  
 #nexus-pre
 nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
 
-args = ("nexus-pre", bowtieOutputFilename,  "-p", "-b")
-popen = subprocess.Popen(args, stdout=subprocess.PIPE)
-popen.wait()
-output = popen.stdout.read()
-print output
-if popen.returncode != 0:
- print "error"
- sys.exit()
+if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
+    args = ("nexus-pre", bowtieOutputFilename,  "-p", "-b")
+    print "Filtering post-mapping barcodes..."
+    popen = subprocess.Popen(args, stdout=subprocess.PIPE)
+    popen.wait()
+    output = popen.stdout.read()
+    if results.verbose == True:
+        print output
+    if popen.returncode != 0:
+        print "error"
+        sys.exit()
 
-if(platform.system() == "Linux" or platform.system() == "Linux2"):
- args = (os.path.dirname(os.path.realpath(__file__)) + "/bam_indexer.py", nexusOutputFilename)
-else:
- args = ("python", "bam_indexer.py", nexusOutputFilename)
+args = ("python", os.path.dirname(os.path.realpath(__file__)) + "/bam_indexer.py", nexusOutputFilename)
+print "Creating indexed bam file..."
 popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 popen.wait()
 output = popen.stdout.read()
-print output
+if results.verbose == True:
+    print output
 if popen.returncode != 0:
- print "error"
- sys.exit()
+    print "error"
+    sys.exit()
  
  
 #cleanup
 if results.clean:
- print "deleting intermediate files..."
- os.remove(bowtieOutputFilename)
- if results.exo:
-  os.remove(flexbarOutputFilename)
- else:
-  os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension)
-  os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_unidentified" + inFileExtension)
- os.remove(nexusOutputFilename)
+    print "deleting intermediate files..."
+    os.remove(bowtieOutputFilename)
+    os.remove(nexusOutputFilename)
+    if results.exo:
+        os.remove(flexbarOutputFilename)
+    else:
+        os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension)
+        os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_unidentified" + inFileExtension)
