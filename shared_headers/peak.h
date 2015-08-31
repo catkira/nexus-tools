@@ -43,11 +43,10 @@ struct PeakCandidate
 
 template <typename TEdgeDistribution>
 double slidingWindowScore(const typename TEdgeDistribution::const_iterator centerIt, Range<TEdgeDistribution> range,
-    const unsigned halfWindowWidth, const double scoreLimit, const double ratioTolerance, Range<TEdgeDistribution>& windowRange)
+    const unsigned halfWindowWidth, const double ratioTolerance, Range<TEdgeDistribution>& windowRange)
 {
     typename TEdgeDistribution::const_iterator runningIt = centerIt;
     windowRange.first = centerIt;
-    scoreLimit;
     double score = 0;
     double half1score = 0;
     int distance = 0;
@@ -115,7 +114,7 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range,
     double tempScore = 0;
     int checkAhead = 0;
     auto calcScore = [&range, halfWindowWidth, scoreLimit, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange) 
-        {return slidingWindowScore<TEdgeDistribution>(_it, range, halfWindowWidth, scoreLimit, ratioTolerance, _tempSlidingWindowRange);};
+        {return slidingWindowScore<TEdgeDistribution>(_it, range, halfWindowWidth, ratioTolerance, _tempSlidingWindowRange);};
     PeakCandidate<TEdgeDistribution> peakCandidate;
     Range<TEdgeDistribution> tempSlidingWindowRange;
     auto prevIt = range.first;

@@ -1,22 +1,14 @@
-#define SEQAN_PROFILE
-
 #include <seqan/bam_io.h>
 #include <seqan/bed_io.h>
 #include <seqan/seq_io.h>
 #include <seqan/arg_parse.h>
 #include <seqan/basic.h>
 #include <string>
-#include <unordered_set>
-#include <unordered_map>
-#include <boost/container/flat_map.hpp>
-#include <boost/container/flat_set.hpp>
 #include <algorithm>
+#include <chrono>
 
 #include "peak.h"
 #include "BamRecordKey.h"
-
-using seqan::_proFloat;
-using seqan::sysTime;
 
 struct Statistics
 {
@@ -60,13 +52,8 @@ seqan::ArgumentParser buildParser(void)
     setHelpText(parser, 0, "SAM or BAM file");
 
     seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
-        "b", "bedGraph", "Create a BedGraph file");
+        "np", "narrowPeak", "Create a narrow peak file");
     addOption(parser, recordWriteBed);
-
-
-    seqan::ArgParseOption performPeakCalling = seqan::ArgParseOption(
-        "p", "Peak", "Perform peak calling");
-    addOption(parser, performPeakCalling);
 
     seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
         "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
@@ -176,7 +163,7 @@ int main(int argc, char const * argv[])
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
 
-    const bool bedOutputEnabled = seqan::isSet(parser, "b");
+    const bool narrowPeakEnabled = seqan::isSet(parser, "np");
 
     OccurenceMap occurenceMap;
     auto occurenceMapIt = occurenceMap.begin();
@@ -184,7 +171,7 @@ int main(int argc, char const * argv[])
     Statistics stats;
 
     std::cout << "reading file... ";
-    SEQAN_PROTIMESTART(loopTime);
+    auto t1 = std::chrono::steady_clock::now();
     seqan::BamAlignmentRecord record;
 
     seqan::BamHeader header;
@@ -201,12 +188,11 @@ int main(int argc, char const * argv[])
             ++stats.samePositionReads;
     }
 
-    double loop = SEQAN_PROTIMEDIFF(loopTime);
-    std::cout << loop << "s" << std::endl;
+    auto t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     printStatistics(std::cout, stats);
 
-    SEQAN_PROTIMESTART(peakCandidatesTime);
-
+    
     double scoreLimit = 0.2;
     unsigned int halfWindowWidth = 30;
     double ratioTolerance = 0.2; // allow 20% tolerance in score between first und second halfWindow
@@ -221,11 +207,12 @@ int main(int argc, char const * argv[])
     std::cout << "ratio tolerance: " << ratioTolerance << std::endl;
 
     std::cout << "calculating peak candidates...";
+    t1 = std::chrono::steady_clock::now();
     std::vector<PeakCandidate<OccurenceMap>> positionsVector;
 
     collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, halfWindowWidth, ratioTolerance, positionsVector);
-    loop = SEQAN_PROTIMEDIFF(peakCandidatesTime);
-    std::cout << loop << "s" << std::endl;
+    t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
 
     SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename);
