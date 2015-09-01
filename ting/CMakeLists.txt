@@ -25,8 +25,10 @@ add_definitions (${SEQAN_DEFINITIONS})
 # ----------------------------------------------------------------------------
 # Build Setup
 # ----------------------------------------------------------------------------
+SET(Boost_USE_STATIC_LIBS ON)
 FIND_PACKAGE( Boost 1.40 COMPONENTS program_options REQUIRED )
 INCLUDE_DIRECTORIES(${SEQAN_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../shared_headers)
+LINK_DIRECTORIES ( ${Boost_LIBRARY_DIRS} )
 
 
 

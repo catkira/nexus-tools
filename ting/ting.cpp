@@ -37,7 +37,7 @@ seqan::ArgumentParser buildParser(void)
 
     setCategory(parser, "Ting");
     setShortDescription(parser, "Peak Caller for Chip-Nexus and Chip-Exo data");
-    addUsageLine(parser, " \\fI<READ_FILE>  \\fI<OUTPUT_FILE> \\fI[OPTIONS]\\fP");
+    addUsageLine(parser, " \\fI<READ_FILE>  \\fI[OPTIONS]\\fP");
     addDescription(parser,
         "");
 
@@ -50,6 +50,12 @@ seqan::ArgumentParser buildParser(void)
     setValidValues(fileArg, seqan::BamFileIn::getFileExtensions());
     addArgument(parser, fileArg);
     setHelpText(parser, 0, "SAM or BAM file");
+
+    seqan::ArgParseOption outputOpt = seqan::ArgParseOption(
+        "o", "output", "Prefix of the output file.",
+        seqan::ArgParseOption::OUTPUT_FILE, "OUTPUT");
+    setDefaultValue(outputOpt, "");
+    addOption(parser, outputOpt);
 
     seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
         "np", "narrowPeak", "Create a narrow peak file");
@@ -145,17 +151,15 @@ int main(int argc, char const * argv[])
         return 1;
     }
 
-    seqan::CharString fileName2;
     std::string outFilename;
-    if (fileCount == 2)
+    seqan::CharString output;
+    getOptionValue(output, parser, "output");
+    if (output != "")
     {
-        getArgumentValue(fileName2, parser, 0, 1);
-        outFilename = seqan::toCString(fileName2);
+        outFilename = seqan::toCString(output);
     }
     else
         outFilename = getFilePrefix(argv[1]) + std::string("_candidateScores");
-
-    unsigned numRecords;
 
     seqan::CharString fileName1;
     getArgumentValue(fileName1, parser, 0, 0);
@@ -166,8 +170,6 @@ int main(int argc, char const * argv[])
     const bool narrowPeakEnabled = seqan::isSet(parser, "np");
 
     OccurenceMap occurenceMap;
-    auto occurenceMapIt = occurenceMap.begin();
-
     Statistics stats;
 
     std::cout << "reading file... ";

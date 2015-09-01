@@ -55,71 +55,15 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool cluste
     }
 }
 
-seqan::ArgumentParser buildParser(void)
+po::options_description buildParser(void)
 {
-    seqan::ArgumentParser parser;
-
-    setCategory(parser, "Chip Nexus/Exo Data Processing");
-    setShortDescription(parser, "Preprocessing Pipeline for Chip-Nexus and Chip-Exo data");
-    addUsageLine(parser, " \\fI<READ_FILE1>\\fP \\fI<[READ_FILE2]>\\fP \\fI[OPTIONS]\\fP");
-    addDescription(parser,
-        "");
-
-    addDescription(parser, "");
-
-    seqan::setVersion(parser, SEQAN_APP_VERSION " [" SEQAN_REVISION "]");
-    setDate(parser, SEQAN_DATE);
-
-    seqan::ArgParseArgument fileArg(seqan::ArgParseArgument::INPUT_FILE, "mapped reads", true);
-    setValidValues(fileArg, seqan::BamFileIn::getFileExtensions());
-    addArgument(parser, fileArg);
-    setHelpText(parser, 0, "SAM or BAM file");
-
-    seqan::ArgParseOption recordFilterCluster = seqan::ArgParseOption(
-        "f", "cluster size", "Minimum number of mapped reads at the same position",
-        seqan::ArgParseOption::INTEGER, "VALUE");
-    setDefaultValue(recordFilterCluster, 0);
-    setMinValue(recordFilterCluster, "0");
-    addOption(parser, recordFilterCluster);
-
-    seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
-        "b", "bedGraph", "Create a BedGraph file");
-    addOption(parser, recordWriteBed);
-
-    seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
-        "r", "records", "Number of records to be read in one run.",
-        seqan::ArgParseOption::INTEGER, "VALUE");
-    setDefaultValue(recordOpt, 10000);
-    setMinValue(recordOpt, "10");
-    addOption(parser, recordOpt);
-
-    seqan::ArgParseOption performPeakCalling = seqan::ArgParseOption(
-        "p", "Peak", "Perform peak calling");
-    addOption(parser, performPeakCalling);
-
-    seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
-        "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
-        seqan::ArgParseOption::DOUBLE, "VALUE");
-    setDefaultValue(ratioOpt, 2.0);
-    setMinValue(ratioOpt, "0.01");
-    setMaxValue(ratioOpt, "100");
-    addOption(parser, ratioOpt);
-
-    seqan::ArgParseOption halfWindowSizeOpt = seqan::ArgParseOption(
-        "w", "size", "Half window size",
-        seqan::ArgParseOption::INTEGER, "VALUE");
-    setDefaultValue(halfWindowSizeOpt, 20);
-    setMinValue(halfWindowSizeOpt, "1");
-    addOption(parser, halfWindowSizeOpt);
-
-    seqan::ArgParseOption scoreLimitOpt = seqan::ArgParseOption(
-        "s", "score", "Score limit",
-        seqan::ArgParseOption::DOUBLE, "VALUE");
-    setDefaultValue(scoreLimitOpt, 10);
-    setMinValue(scoreLimitOpt, "0.0001");
-    addOption(parser, scoreLimitOpt);
-
-    return parser;
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "produce help message")
+        ("compression", po::value<int>(), "set compression level")
+        ("input-file", po::value< std::vector<std::string> >(), "input file")
+        ;
+    return desc;
 }
 
 std::string getFilePath(const std::string& fileName)
@@ -197,41 +141,40 @@ TPosition getPosition(const OccurenceMap::value_type& val)
 int main(int argc, char const * argv[])
 {
     // Additional checks
-    seqan::ArgumentParser parser = buildParser();
-    seqan::ArgumentParser::ParseResult res = seqan::parse(parser, argc, argv);
+    auto desc = buildParser();
+    
+    po::positional_options_description p;
+    p.add("input-file", -1);
+    po::variables_map vm;
+    po::store(po::command_line_parser(argc, argv).
+        options(desc).positional(p).run(), vm);
+    po::notify(vm);
 
-    // Check if input was successfully parsed.
-    if (res != seqan::ArgumentParser::PARSE_OK)
-        return res == seqan::ArgumentParser::PARSE_ERROR;
-
-    // Check if one or two input files (single or paired-end) were given.
-    int fileCount = getArgumentValueCount(parser, 0);
-    if (!(fileCount == 1 || fileCount == 2)) {
-        printShortHelp(parser);
+    if (vm.count("help")) {
+        std::cout << desc << "\n";
         return 1;
     }
 
-    unsigned numRecords;
-    getOptionValue(numRecords, parser, "r");
+    // Check if one or two input files (single or paired-end) were given.
+    if (vm.count("input-file") < 1)
+    {
+        std::cout << desc << "\n";
+        return 1;
+    }
 
-    seqan::CharString fileName1, fileName2;
-    getArgumentValue(fileName1, parser, 0, 0);
+    if(vm["input-file"].as< std::vector<std::string> >().size() < 2)
+    {
+        std::cout << desc << "\n";
+        return 1;
+    }
+
+    const auto fileName1  = vm["input-file"].as< std::vector<std::string> >()[0];
+    const auto fileName2 = vm["input-file"].as< std::vector<std::string> >()[1];
 
     // Open input file, BamFileIn can read SAM and BAM files.
-    seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
+    seqan::BamFileIn bamFileIn(fileName1.c_str());
 
     std::string outFilename;
-    if (fileCount == 2)
-    {
-        getArgumentValue(fileName2, parser, 0, 1);
-        outFilename = seqan::toCString(fileName2);
-    }
-    else
-        outFilename = getFilePrefix(argv[1]) + std::string("_filtered");
-
-    const bool filter = seqan::isSet(parser, "f");
-    const bool bedOutputEnabled = seqan::isSet(parser, "b");
-    const bool peakCallingEnabled = seqan::isSet(parser, "p");
 
     std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
     OccurenceMap occurenceMap;
@@ -288,48 +231,12 @@ int main(int argc, char const * argv[])
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
 
     const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
-    if (filter)
-    {
-        t1 = std::chrono::steady_clock::now();
-        std::cout << "filtering reads... ";
-        unsigned clusterSize = 0;
-        getOptionValue(clusterSize, parser, "f");
-        // Open output file, BamFileOut accepts also an ostream and a format tag.
-        //while (!atEnd(bamFileIn2))
-        seqan::BamFileIn bamFileIn2(seqan::toCString(outFilename + ".bam"));
-        //clear(header);
-        readHeader(header, bamFileIn2);
-        SaveBam<seqan::BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
-        while (!atEnd(bamFileIn2))
-        {
-            readRecord(record, bamFileIn2);
-            const auto occurenceMapIt = occurenceMap.find(BamRecordKey<NoBarcode>(record));
-            if (occurenceMapIt->second.second >= clusterSize)
-            {
-                //sortedBamVector2.emplace_back(sortedBamVector[i]);
-                saveBam2.write(record);
-                ++stats.readsAfterFiltering;
-                //++keyMapIt;
-            }
-        }
-        saveBam2.close();
-
-        t2 = std::chrono::steady_clock::now();
-        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
-    }
 
     // occurenceMap = number of mappings for each location in genome
     // duplicationRate[x] = number of locations with x mappings
     t1 = std::chrono::steady_clock::now();
     std::cout << "calculating unique/non unique duplication Rate... ";
 
-    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedForwardStrand(outFilename + "_forward");
-    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedReverseStrand(outFilename + "_reverse");
-    if (bedOutputEnabled)
-    {
-        saveBedForwardStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
-        saveBedReverseStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
-    }
 
     seqan::BedRecord<seqan::Bed4> bedRecord;
 
@@ -337,26 +244,6 @@ int main(int argc, char const * argv[])
     std::vector<unsigned> duplicationRate;
     std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMap::value_type& val)
     {
-        if (bedOutputEnabled)
-        {
-            bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
-            bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-            if (val.first.pos & 0x01)    // reverse strand
-            {
-                // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
-                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) - 1;
-                bedRecord.endPos = bedRecord.beginPos + 1;
-                bedRecord.name = std::to_string(-static_cast<int32_t>(val.second.second)); // abuse name as val parameter in BedGraph
-                saveBedReverseStrand.write(bedRecord);
-            }
-            else    // forward strand
-            {
-                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1);
-                bedRecord.endPos = bedRecord.beginPos + 1;
-                bedRecord.name = std::to_string(val.second.second); // abuse name as val parameter in BedGraph
-                saveBedForwardStrand.write(bedRecord);
-            }
-        }
         if (duplicationRateUnique.size() < val.second.second)
             duplicationRateUnique.resize(val.second.second);
         ++duplicationRateUnique[val.second.second - 1];
@@ -364,8 +251,6 @@ int main(int argc, char const * argv[])
             duplicationRate.resize(val.second.first);
         ++duplicationRate[val.second.first - 1];
     });
-    saveBedForwardStrand.close();
-    saveBedReverseStrand.close();
 
     std::fstream fs, fs2, fs3;
 #ifdef _MSC_VER
@@ -392,43 +277,5 @@ int main(int argc, char const * argv[])
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     duplicationRateUnique.clear();
     duplicationRate.clear();
-
-    printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
-#ifdef _MSV_VER
-    fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
-#else
-    fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
-#endif
-    printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
-
-    if (peakCallingEnabled)
-    {
-        t1 = std::chrono::steady_clock::now();
-
-        double scoreLimit = 0.2;
-        unsigned int halfWindowWidth = 30;
-        double ratioTolerance = 0.2; // allow 20% tolerance in score between first und second halfWindow
-        getOptionValue(scoreLimit, parser, "s");
-        getOptionValue(halfWindowWidth, parser, "w");
-        getOptionValue(ratioTolerance, parser, "t");
-
-        std::cout << std::endl << std::endl;
-        std::cout << "Settings for peak calling" << std::endl;
-        std::cout << "half window size: " << halfWindowWidth << std::endl;
-        std::cout << "score limit: " << scoreLimit << std::endl;
-        std::cout << "ratio tolerance: " << ratioTolerance << std::endl;
-
-        std::cout << "calculating peak candidates...";
-        std::vector<PeakCandidate<OccurenceMap>> positionsVector;
-
-        collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, halfWindowWidth, ratioTolerance, positionsVector);
-        t2 = std::chrono::steady_clock::now();
-        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
-        std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
-
-        SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename + "_candidateScores");
-        saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
-        forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
-    }
     return 0;
 }
