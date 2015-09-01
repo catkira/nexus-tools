@@ -2,40 +2,38 @@ cmake_minimum_required(VERSION 3.1)
 project(test-app)
 message (STATUS "Configuring test-app")
 
-set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB BZip2)
-find_package(SeqAn REQUIRED)
-find_package(CXX11 REQUIRED)
-find_package(CXX14)
 
-if (NOT CXX11_FOUND)
-    message (FATAL_ERROR "  C++11 not found: Not building test-app.")
-    return ()
-endif (NOT CXX11_FOUND)
+
+# Search SeqAn and select dependencies.
+set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB)
+find_package (SeqAn REQUIRED)
 
 # Warn if OpenMP was not found.
-if (NOT SEQAN_HAS_OPENMP)
+if (NOT ${SEQAN_HAS_OPENMP})
     message (WARNING "WARNING WARNING WARNING\nWARNING: OpenMP not found. test-app will be built without multi-threading! "
     "This is probably not what you want! Use GCC or a very, very recent version of Clang.\nWARNING WARNING WARNING")
-endif (NOT SEQAN_HAS_OPENMP)
+endif (NOT ${SEQAN_HAS_OPENMP})
 
 # Warn if Zlib was not found.
-if (NOT SEQAN_HAS_ZLIB)
-  message (WARNING "WARNING: Zlib not found. Building testappwithout gzipped input and output.")
-endif (NOT SEQAN_HAS_ZLIB)
-
-
-# Add include directories.
-include_directories (${SEQAN_INCLUDE_DIRS})
+if (NOT ${SEQAN_HAS_ZLIB})
+  message (WARNING "WARNING: Zlib not found. Building nexus-pre without gzipped input and output.")
+endif (NOT ${SEQAN_HAS_ZLIB})
 
 # Add definitions set by find_package (SeqAn).
 add_definitions (${SEQAN_DEFINITIONS})
+
+# ----------------------------------------------------------------------------
+# Build Setup
+# ----------------------------------------------------------------------------
+FIND_PACKAGE( Boost 1.40 COMPONENTS program_options REQUIRED )
+INCLUDE_DIRECTORIES(${SEQAN_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${CMAKE_CURRENT_SOURCE_DIR}/../shared_headers)
 
 # Sources files
     FILE(GLOB Sources RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.cpp) 
 	
 # Header files
     FILE(GLOB Headers RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *.h) 
-	
+	set(Headers ${Headers} ${CMAKE_CURRENT_SOURCE_DIR}/../shared_headers/BamRecordKey.h)
 
 #include(${Projects_SOURCE_DIR}/SourceGroups.cmake)	
 		
@@ -43,5 +41,5 @@ add_definitions (${SEQAN_DEFINITIONS})
     SET(ALLSRC ${Sources} ${Headers})
     ADD_EXECUTABLE(test-app ${ALLSRC})
 	
-    target_link_libraries (test-app ${SEQAN_LIBRARIES})
+    target_link_libraries (test-app ${SEQAN_LIBRARIES} ${Boost_LIBRARIES} )
 				  

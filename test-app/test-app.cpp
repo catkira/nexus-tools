@@ -1,358 +1,434 @@
-// ==========================================================================
-//                 SeqAn - The Library for Sequence Analysis
-// ==========================================================================
-// Copyright (c) 2006-2015, Knut Reinert, FU Berlin
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-//     * Redistributions of source code must retain the above copyright
-//       notice, this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in the
-//       documentation and/or other materials provided with the distribution.
-//     * Neither the name of Knut Reinert or the FU Berlin nor the names of
-//       its contributors may be used to endorse or promote products derived
-//       from this software without specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL KNUT REINERT OR THE FU BERLIN BE LIABLE
-// FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-// DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-// SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-// CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
-// LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
-// OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
-// DAMAGE.
-//
-// ==========================================================================
-// Author: Manuel Holtgrewe <manuel.holtgrewe@fu-berlin.de>
-// ==========================================================================
-
-#ifndef TESTS_SEQ_IO_TEST_EASY_SEQ_IO_H_
-#define TESTS_SEQ_IO_TEST_EASY_SEQ_IO_H_
-
-#include <seqan/basic.h>
-#include <seqan/sequence.h>
+#include <seqan/bam_io.h>
+#include <seqan/bed_io.h>
 #include <seqan/seq_io.h>
+#include <seqan/arg_parse.h>
+#include <seqan/basic.h>
+#include <string>
+#include <unordered_set>
+#include <unordered_map>
+#include <boost/container/flat_map.hpp>
+#include <boost/container/flat_set.hpp>
+#include <boost/program_options.hpp>
+#include <algorithm>
+#include <chrono>
 
-// ---------------------------------------------------------------------------
-// Test recognition of supported file types.
-// ---------------------------------------------------------------------------
-using namespace seqan;
+#include "peak.h"
+#include "BamRecordKey.h"
 
-#define SEQAN_DEBUG
+namespace po = boost::program_options;
 
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_recognize_file_type_gz_fasta)
+struct Statistics
 {
-#if SEQAN_HAS_ZLIB
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_PATH_TO_ROOT();
-	append(filePath, "/tests/seq_io/test_dna.fa.gz");
+    unsigned totalReads = 0;
+    unsigned totalMappedReads = 0;
+    unsigned removedReads = 0;
+    unsigned totalSamePositionReads = 0;
+    unsigned readsAfterFiltering = 0;
+    unsigned int couldNotMap = 0;
+    unsigned int couldNotMapUniquely = 0;
+};
 
-	// Create SequenceStream object.
-	SeqFileIn seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	SEQAN_ASSERT(isEqual(format(seqIO), Fasta()));
-#endif  // #if SEQAN_HAS_ZLIB
+template <typename TStream>
+void printStatistics(TStream &stream, const Statistics &stats, const bool clusterFiltering, const bool tabbed = false)
+{
+    if (tabbed)
+    {
+        stream << "Total reads" << "\t" << stats.totalReads << std::endl;
+        stream << "Mapped reads" << "\t" << stats.totalMappedReads << std::endl;
+        stream << "Non mappable reads" << "\t" << stats.couldNotMap << std::endl;
+        stream << "Non uniquely mappable reads" << "\t" << stats.couldNotMapUniquely << std::endl;
+        stream << "After barcode filtering" << "\t" << stats.totalMappedReads - stats.removedReads << "\t" << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "Total duplet reads" << "\t" << stats.totalSamePositionReads << std::endl;
+        if (clusterFiltering)
+            stream << "After cluster filtering" << "\t" << stats.readsAfterFiltering << "\t" << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    }
+    else
+    {
+        stream << "Total reads                          : " << stats.totalReads << std::endl;
+        stream << "Mapped reads                         : " << stats.totalMappedReads << std::endl;
+        stream << "Non mappable reads                   : " << stats.couldNotMap << std::endl;
+        stream << "Non uniquely mappable reads          : " << stats.couldNotMapUniquely << std::endl;
+        stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
+        if (clusterFiltering)
+            stream << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+    }
 }
 
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_recognize_file_type_bz2_fasta)
+seqan::ArgumentParser buildParser(void)
 {
-#if SEQAN_HAS_BZIP2
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_PATH_TO_ROOT();
-	append(filePath, "/tests/seq_io/test_dna.fa.bz2");
+    seqan::ArgumentParser parser;
 
-	// Create SequenceStream object.
-	SeqFileIn seqIO(toCString(filePath));
+    setCategory(parser, "Chip Nexus/Exo Data Processing");
+    setShortDescription(parser, "Preprocessing Pipeline for Chip-Nexus and Chip-Exo data");
+    addUsageLine(parser, " \\fI<READ_FILE1>\\fP \\fI<[READ_FILE2]>\\fP \\fI[OPTIONS]\\fP");
+    addDescription(parser,
+        "");
 
-	// Check that the file type and format are set correctly.
-	SEQAN_ASSERT(isEqual(format(seqIO), Fasta()));
-#endif  // #if SEQAN_HAS_BZIP2
+    addDescription(parser, "");
+
+    seqan::setVersion(parser, SEQAN_APP_VERSION " [" SEQAN_REVISION "]");
+    setDate(parser, SEQAN_DATE);
+
+    seqan::ArgParseArgument fileArg(seqan::ArgParseArgument::INPUT_FILE, "mapped reads", true);
+    setValidValues(fileArg, seqan::BamFileIn::getFileExtensions());
+    addArgument(parser, fileArg);
+    setHelpText(parser, 0, "SAM or BAM file");
+
+    seqan::ArgParseOption recordFilterCluster = seqan::ArgParseOption(
+        "f", "cluster size", "Minimum number of mapped reads at the same position",
+        seqan::ArgParseOption::INTEGER, "VALUE");
+    setDefaultValue(recordFilterCluster, 0);
+    setMinValue(recordFilterCluster, "0");
+    addOption(parser, recordFilterCluster);
+
+    seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
+        "b", "bedGraph", "Create a BedGraph file");
+    addOption(parser, recordWriteBed);
+
+    seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
+        "r", "records", "Number of records to be read in one run.",
+        seqan::ArgParseOption::INTEGER, "VALUE");
+    setDefaultValue(recordOpt, 10000);
+    setMinValue(recordOpt, "10");
+    addOption(parser, recordOpt);
+
+    seqan::ArgParseOption performPeakCalling = seqan::ArgParseOption(
+        "p", "Peak", "Perform peak calling");
+    addOption(parser, performPeakCalling);
+
+    seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
+        "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
+        seqan::ArgParseOption::DOUBLE, "VALUE");
+    setDefaultValue(ratioOpt, 2.0);
+    setMinValue(ratioOpt, "0.01");
+    setMaxValue(ratioOpt, "100");
+    addOption(parser, ratioOpt);
+
+    seqan::ArgParseOption halfWindowSizeOpt = seqan::ArgParseOption(
+        "w", "size", "Half window size",
+        seqan::ArgParseOption::INTEGER, "VALUE");
+    setDefaultValue(halfWindowSizeOpt, 20);
+    setMinValue(halfWindowSizeOpt, "1");
+    addOption(parser, halfWindowSizeOpt);
+
+    seqan::ArgParseOption scoreLimitOpt = seqan::ArgParseOption(
+        "s", "score", "Score limit",
+        seqan::ArgParseOption::DOUBLE, "VALUE");
+    setDefaultValue(scoreLimitOpt, 10);
+    setMinValue(scoreLimitOpt, "0.0001");
+    addOption(parser, scoreLimitOpt);
+
+    return parser;
 }
 
-// ---------------------------------------------------------------------------
-// Test recognition of supported file formats.
-// ---------------------------------------------------------------------------
-
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_recognize_file_format_text_fasta)
+std::string getFilePath(const std::string& fileName)
 {
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_PATH_TO_ROOT();
-	append(filePath, "/tests/seq_io/test_dna.fa");
-
-	// Create SequenceStream object.
-	SeqFileIn seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	SEQAN_ASSERT(isEqual(format(seqIO), Fasta()));
+    std::size_t found = fileName.find_last_of("/\\");
+    if (found == std::string::npos || found < 1)
+        return std::string();
+    return fileName.substr(0, found);
 }
 
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_recognize_file_format_text_fastq)
+std::string getFilePrefix(const std::string& fileName, const bool withPath = true)
 {
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_PATH_TO_ROOT();
-	append(filePath, "/tests/seq_io/test_dna.fq");
-
-	// Create SequenceStream object.
-	SeqFileIn seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	SEQAN_ASSERT(isEqual(format(seqIO), Fastq()));
+    std::size_t found = fileName.find_last_of(".");
+    std::size_t found2 = std::string::npos;
+    if (!withPath)
+        found2 = fileName.find_last_of("/\\");
+    if (found == std::string::npos)
+        return std::string();
+    if (found2 == std::string::npos)
+        return fileName.substr(0, found);
+    return fileName.substr(found2 + 1, found - found2);
 }
 
-// ---------------------------------------------------------------------------
-// Test reading with different interfaces.
-// ---------------------------------------------------------------------------
-
-template <typename TId, typename TSeq>
-void testSeqIOSequenceFileReadRecordTextFasta()
+template <typename TContext>
+struct SaveBam
 {
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_PATH_TO_ROOT();
-	append(filePath, "/tests/seq_io/test_dna.fa");
+    SaveBam(const seqan::BamHeader header, TContext& context, const std::string& filename)
+        : bamFileOut(static_cast<TContext>(context))
+    {
+        if (!open(bamFileOut, (filename + ".bam").c_str()))
+        {
+            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
+            return;
+        }
+        writeHeader(bamFileOut, header);
+    }
+    void write(const seqan::BamAlignmentRecord& record)
+    {
+        writeRecord(bamFileOut, record);
+    }
+    void close()
+    {
+        seqan::close(bamFileOut);
+    }
+    seqan::BamFileOut bamFileOut;
+};
 
-	// Create SequenceStream object.
-	SeqFileIn seqIO(toCString(filePath));
 
-	// Check that the file type and format are set correctly.
-	TId id;
-	TSeq seq;
+typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>, CompareBamRecordKey<NoBarcode>> OccurenceMap;
 
-	readRecord(id, seq, seqIO);
-	SEQAN_ASSERT_EQ(id, "seq1");
-	SEQAN_ASSERT_EQ(seq, "CGATCGATAAT");
-
-	readRecord(id, seq, seqIO);
-	SEQAN_ASSERT_EQ(id, "seq2");
-	SEQAN_ASSERT_EQ(seq, "CCTCTCTCTCCCT");
-
-	readRecord(id, seq, seqIO);
-	SEQAN_ASSERT_EQ(id, "seq3");
-	SEQAN_ASSERT_EQ(seq, "CCCCCCCC");
-
-	SEQAN_ASSERT(atEnd(seqIO));
+BamRecordKey<NoBarcode> getKey(const OccurenceMap::value_type& val)
+{
+    return val.first;
 }
 
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_read_record_text_fasta)
+unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
 {
-	testSeqIOSequenceFileReadRecordTextFasta<seqan::CharString, seqan::Dna5String>();
-	testSeqIOSequenceFileReadRecordTextFasta<std::string, std::string>();
-	testSeqIOSequenceFileReadRecordTextFasta<std::string, seqan::Dna5String>();
-	testSeqIOSequenceFileReadRecordTextFasta<seqan::CharString, std::string>();
+    return val.second.second;
 }
 
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_read_all_text_fasta)
+bool isReverseStrand(const OccurenceMap::value_type& val)
 {
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_PATH_TO_ROOT();
-	append(filePath, "/tests/seq_io/test_dna.fa");
-
-	// Create SequenceStream object.
-	SeqFileIn seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	seqan::StringSet<seqan::Dna5String> seqs;
-
-	readRecords(ids, seqs, seqIO);
-	SEQAN_ASSERT_EQ(length(seqs), 3u);
-	SEQAN_ASSERT_EQ(ids[0], "seq1");
-	SEQAN_ASSERT_EQ(seqs[0], "CGATCGATAAT");
-	SEQAN_ASSERT_EQ(ids[1], "seq2");
-	SEQAN_ASSERT_EQ(seqs[1], "CCTCTCTCTCCCT");
-	SEQAN_ASSERT_EQ(ids[2], "seq3");
-	SEQAN_ASSERT_EQ(seqs[2], "CCCCCCCC");
-
-	SEQAN_ASSERT(atEnd(seqIO));
+    return (val.first.pos & 0x01) != 0;
 }
 
-// ---------------------------------------------------------------------------
-// Test writing with different interfaces.
-// ---------------------------------------------------------------------------
-
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_write_record_text_fasta)
+template <typename TPosition>
+TPosition getPosition(const OccurenceMap::value_type& val)
 {
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_TEMP_FILENAME();
-	append(filePath, ".fa");
-
-	// Create SequenceStream object.
-	SeqFileOut seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	appendValue(ids, "seq1");
-	appendValue(ids, "seq2");
-	appendValue(ids, "seq3");
-	seqan::StringSet<seqan::Dna5String> seqs;
-	appendValue(seqs, "CGATCGATAAT");
-	appendValue(seqs, "CCTCTCTCTCCCT");
-	appendValue(seqs, "CCCCCCCC");
-
-	writeRecords(seqIO, ids, seqs);
-
-	close(seqIO);  // Make sure we can read this later.
-
-	seqan::CharString pathToExpected = SEQAN_PATH_TO_ROOT();
-	append(pathToExpected, "/tests/seq_io/test_dna.fa");
-	SEQAN_ASSERT_MSG(seqan::_compareTextFilesAlt(toCString(pathToExpected), toCString(filePath)), "Output should match example.");
+    TPosition position;
+    position.chromosomeID = static_cast<__int32>(val.first.pos >> 32);
+    position.position = static_cast<__int32>(val.first.pos) >> 1;
+    return position;    // assume return value optimization
 }
 
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_write_all_text_fasta)
+int main(int argc, char const * argv[])
 {
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_TEMP_FILENAME();
-	append(filePath, ".fa");
+    // Additional checks
+    seqan::ArgumentParser parser = buildParser();
+    seqan::ArgumentParser::ParseResult res = seqan::parse(parser, argc, argv);
 
-	// Create SequenceStream object.
-	SeqFileOut seqIO(toCString(filePath));
+    // Check if input was successfully parsed.
+    if (res != seqan::ArgumentParser::PARSE_OK)
+        return res == seqan::ArgumentParser::PARSE_ERROR;
 
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	appendValue(ids, "seq1");
-	appendValue(ids, "seq2");
-	appendValue(ids, "seq3");
-	seqan::StringSet<seqan::Dna5String> seqs;
-	appendValue(seqs, "CGATCGATAAT");
-	appendValue(seqs, "CCTCTCTCTCCCT");
-	appendValue(seqs, "CCCCCCCC");
+    // Check if one or two input files (single or paired-end) were given.
+    int fileCount = getArgumentValueCount(parser, 0);
+    if (!(fileCount == 1 || fileCount == 2)) {
+        printShortHelp(parser);
+        return 1;
+    }
 
-	writeRecords(seqIO, ids, seqs);
+    unsigned numRecords;
+    getOptionValue(numRecords, parser, "r");
 
-	close(seqIO);  // Make sure we can read this later.
+    seqan::CharString fileName1, fileName2;
+    getArgumentValue(fileName1, parser, 0, 0);
 
-	seqan::CharString pathToExpected = SEQAN_PATH_TO_ROOT();
-	append(pathToExpected, "/tests/seq_io/test_dna.fa");
-	SEQAN_ASSERT_MSG(seqan::_compareTextFilesAlt(toCString(pathToExpected), toCString(filePath)), "Output should match example.");
+    // Open input file, BamFileIn can read SAM and BAM files.
+    seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
+
+    std::string outFilename;
+    if (fileCount == 2)
+    {
+        getArgumentValue(fileName2, parser, 0, 1);
+        outFilename = seqan::toCString(fileName2);
+    }
+    else
+        outFilename = getFilePrefix(argv[1]) + std::string("_filtered");
+
+    const bool filter = seqan::isSet(parser, "f");
+    const bool bedOutputEnabled = seqan::isSet(parser, "b");
+    const bool peakCallingEnabled = seqan::isSet(parser, "p");
+
+    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
+    OccurenceMap occurenceMap;
+
+    Statistics stats;
+
+    std::cout << "barcode filtering... ";
+    auto t1 = std::chrono::steady_clock::now();
+    seqan::BamAlignmentRecord record;
+
+    seqan::BamHeader header;
+    readHeader(header, bamFileIn);
+
+    SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
+
+    unsigned tagID = 0;
+
+    while (!atEnd(bamFileIn))
+    {
+        readRecord(record, bamFileIn);
+        ++stats.totalReads;
+        const seqan::BamTagsDict tags(record.tags);
+        if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
+        {
+            __int32 tagValue = 0;
+            extractTagValue(tagValue, tags, tagID);
+            if (tagValue == 0)
+                ++stats.couldNotMap;
+            else
+                ++stats.couldNotMapUniquely;
+        }
+        if (record.flag != 0x00 && record.flag != 0x10)
+            continue;
+
+        ++stats.totalMappedReads;
+        const BamRecordKey<WithBarcode> key(record);
+        const BamRecordKey<NoBarcode> pos(record);
+        const auto insertResult = keySet.insert(std::move(key));
+        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
+        if (!insertResult.second)  // element was not inserted because it existed already
+            ++stats.removedReads;
+        else
+        {
+            saveBam.write(record);
+            ++mapItem.second; // unique hits
+        }
+        // non unique hits
+        ++mapItem.first;
+    }
+    saveBam.close();
+    seqan::clear(keySet);
+
+    auto t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+
+    const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
+    if (filter)
+    {
+        t1 = std::chrono::steady_clock::now();
+        std::cout << "filtering reads... ";
+        unsigned clusterSize = 0;
+        getOptionValue(clusterSize, parser, "f");
+        // Open output file, BamFileOut accepts also an ostream and a format tag.
+        //while (!atEnd(bamFileIn2))
+        seqan::BamFileIn bamFileIn2(seqan::toCString(outFilename + ".bam"));
+        //clear(header);
+        readHeader(header, bamFileIn2);
+        SaveBam<seqan::BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
+        while (!atEnd(bamFileIn2))
+        {
+            readRecord(record, bamFileIn2);
+            const auto occurenceMapIt = occurenceMap.find(BamRecordKey<NoBarcode>(record));
+            if (occurenceMapIt->second.second >= clusterSize)
+            {
+                //sortedBamVector2.emplace_back(sortedBamVector[i]);
+                saveBam2.write(record);
+                ++stats.readsAfterFiltering;
+                //++keyMapIt;
+            }
+        }
+        saveBam2.close();
+
+        t2 = std::chrono::steady_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+    }
+
+    // occurenceMap = number of mappings for each location in genome
+    // duplicationRate[x] = number of locations with x mappings
+    t1 = std::chrono::steady_clock::now();
+    std::cout << "calculating unique/non unique duplication Rate... ";
+
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedForwardStrand(outFilename + "_forward");
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedReverseStrand(outFilename + "_reverse");
+    if (bedOutputEnabled)
+    {
+        saveBedForwardStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
+        saveBedReverseStrand.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
+    }
+
+    seqan::BedRecord<seqan::Bed4> bedRecord;
+
+    std::vector<unsigned> duplicationRateUnique;
+    std::vector<unsigned> duplicationRate;
+    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMap::value_type& val)
+    {
+        if (bedOutputEnabled)
+        {
+            bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
+            bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
+            if (val.first.pos & 0x01)    // reverse strand
+            {
+                // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
+                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) - 1;
+                bedRecord.endPos = bedRecord.beginPos + 1;
+                bedRecord.name = std::to_string(-static_cast<int32_t>(val.second.second)); // abuse name as val parameter in BedGraph
+                saveBedReverseStrand.write(bedRecord);
+            }
+            else    // forward strand
+            {
+                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1);
+                bedRecord.endPos = bedRecord.beginPos + 1;
+                bedRecord.name = std::to_string(val.second.second); // abuse name as val parameter in BedGraph
+                saveBedForwardStrand.write(bedRecord);
+            }
+        }
+        if (duplicationRateUnique.size() < val.second.second)
+            duplicationRateUnique.resize(val.second.second);
+        ++duplicationRateUnique[val.second.second - 1];
+        if (duplicationRate.size() < val.second.first)
+            duplicationRate.resize(val.second.first);
+        ++duplicationRate[val.second.first - 1];
+    });
+    saveBedForwardStrand.close();
+    saveBedReverseStrand.close();
+
+    std::fstream fs, fs2, fs3;
+#ifdef _MSC_VER
+    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
+    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out, _SH_DENYNO);
+#else
+    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out);
+    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out);
+#endif
+    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
+    fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
+    unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
+    duplicationRateUnique.resize(maxLen);
+    std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
+    for (unsigned i = 0; i < maxLen;++i)
+    {
+        if (i > 0)
+            stats.totalSamePositionReads += (duplicationRate[i] * (i));
+        //std::cout << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << std::endl;
+        fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
+        fs2 << i + 1 << "\t" << duplicationRateUnique[i] * (i + 1) << "\t" << duplicationRate[i] * (i + 1) << std::endl;
+    }
+    t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+    duplicationRateUnique.clear();
+    duplicationRate.clear();
+
+    printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
+#ifdef _MSV_VER
+    fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
+#else
+    fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
+#endif
+    printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
+
+    if (peakCallingEnabled)
+    {
+        t1 = std::chrono::steady_clock::now();
+
+        double scoreLimit = 0.2;
+        unsigned int halfWindowWidth = 30;
+        double ratioTolerance = 0.2; // allow 20% tolerance in score between first und second halfWindow
+        getOptionValue(scoreLimit, parser, "s");
+        getOptionValue(halfWindowWidth, parser, "w");
+        getOptionValue(ratioTolerance, parser, "t");
+
+        std::cout << std::endl << std::endl;
+        std::cout << "Settings for peak calling" << std::endl;
+        std::cout << "half window size: " << halfWindowWidth << std::endl;
+        std::cout << "score limit: " << scoreLimit << std::endl;
+        std::cout << "ratio tolerance: " << ratioTolerance << std::endl;
+
+        std::cout << "calculating peak candidates...";
+        std::vector<PeakCandidate<OccurenceMap>> positionsVector;
+
+        collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, halfWindowWidth, ratioTolerance, positionsVector);
+        t2 = std::chrono::steady_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+        std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
+
+        SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename + "_candidateScores");
+        saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
+        forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
+    }
+    return 0;
 }
-
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_write_record_text_fastq_no_qual)
-{
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_TEMP_FILENAME();
-	append(filePath, ".fq");
-	seqan::CharString pathToExpected = SEQAN_PATH_TO_ROOT();
-	append(pathToExpected, "/tests/seq_io/test_dna.fq");
-
-	// Create SequenceStream object.
-	SeqFileIn seqIn(toCString(pathToExpected));
-	SeqFileOut seqOut(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	seqan::StringSet<seqan::Dna5QString> seqs;
-
-	readRecords(ids, seqs, seqIn);
-	writeRecords(seqOut, ids, seqs);
-
-	close(seqIn);
-	close(seqOut);  // Make sure we can read this later.
-
-	SEQAN_ASSERT_MSG(seqan::_compareTextFilesAlt(toCString(pathToExpected), toCString(filePath)), "Output should match example.");
-}
-
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_write_record_text_fastq_with_qual)
-{
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_TEMP_FILENAME();
-	append(filePath, ".fq");
-
-	// Create SequenceStream object.
-	SeqFileOut seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	appendValue(ids, "seq1");
-	appendValue(ids, "seq2");
-	appendValue(ids, "seq3");
-	seqan::StringSet<seqan::Dna5String> seqs;
-	appendValue(seqs, "CGATCGATAAT");
-	appendValue(seqs, "CCTCTCTCTCCCT");
-	appendValue(seqs, "CCCCCCCC");
-	seqan::StringSet<seqan::CharString> quals;
-	appendValue(quals, "IIIIIIIIIII");
-	appendValue(quals, "IIIIIIIIIIIII");
-	appendValue(quals, "IIIIIIII");
-
-	writeRecords(seqIO, ids, seqs, quals);
-
-	close(seqIO);  // Make sure we can read this later.
-
-	seqan::CharString pathToExpected = SEQAN_PATH_TO_ROOT();
-	append(pathToExpected, "/tests/seq_io/test_dna.fq");
-	SEQAN_ASSERT_MSG(seqan::_compareTextFilesAlt(toCString(pathToExpected), toCString(filePath)), "Output should match example.");
-}
-
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_write_all_text_fastq_no_qual)
-{
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_TEMP_FILENAME();
-	append(filePath, ".fq");
-
-	// Create SequenceStream object.
-	SeqFileOut seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	appendValue(ids, "seq1");
-	appendValue(ids, "seq2");
-	appendValue(ids, "seq3");
-	seqan::StringSet<seqan::Dna5QString> seqs;
-	appendValue(seqs, "CGATCGATAAT");
-	appendValue(seqs, "CCTCTCTCTCCCT");
-	appendValue(seqs, "CCCCCCCC");
-
-	writeRecords(seqIO, ids, seqs);
-
-	close(seqIO);  // Make sure we can read this later.
-
-	seqan::CharString pathToExpected = SEQAN_PATH_TO_ROOT();
-	append(pathToExpected, "/tests/seq_io/test_dna.fq");
-	SEQAN_ASSERT_MSG(seqan::_compareTextFilesAlt(toCString(pathToExpected), toCString(filePath)), "Output should match example.");
-}
-
-SEQAN_DEFINE_TEST(test_seq_io_sequence_file_write_all_text_fastq_with_qual)
-{
-	// Build path to file.
-	seqan::CharString filePath = SEQAN_TEMP_FILENAME();
-	append(filePath, ".fq");
-
-	// Create SequenceStream object.
-	SeqFileOut seqIO(toCString(filePath));
-
-	// Check that the file type and format are set correctly.
-	seqan::StringSet<seqan::CharString> ids;
-	appendValue(ids, "seq1");
-	appendValue(ids, "seq2");
-	appendValue(ids, "seq3");
-	seqan::StringSet<seqan::Dna5String> seqs;
-	appendValue(seqs, "CGATCGATAAT");
-	appendValue(seqs, "CCTCTCTCTCCCT");
-	appendValue(seqs, "CCCCCCCC");
-	seqan::StringSet<seqan::CharString> quals;
-	appendValue(quals, "IIIIIIIIIII");
-	appendValue(quals, "IIIIIIIIIIIII");
-	appendValue(quals, "IIIIIIII");
-
-	writeRecords(seqIO, ids, seqs, quals);
-
-	close(seqIO);  // Make sure we can read this later.
-
-	seqan::CharString pathToExpected = SEQAN_PATH_TO_ROOT();
-	append(pathToExpected, "/tests/seq_io/test_dna.fq");
-	SEQAN_ASSERT_MSG(seqan::_compareTextFilesAlt(toCString(pathToExpected), toCString(filePath)), "Output should match example.");
-}
-
-int main()
-{
-	SEQAN_TEST_test_seq_io_sequence_file_recognize_file_type_gz_fasta<true>();
-	return 0;
-}
-
-#endif  // TESTS_SEQ_IO_TEST_EASY_SEQ_IO_H_

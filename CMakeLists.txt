@@ -27,6 +27,8 @@ if(LINUX_STATIC)
 	SET(BUILD_SHARED_LIBRARIES OFF)
 	SET(CMAKE_EXE_LINKER_FLAGS "-static")
 #	SET_TARGET_PROPERTIES(nexus-pre PROPERTIES LINK_SEARCH_END_STATIC 1)
+else()
+	add_definitions (-DBOOST_ALL_DYN_LINK)
 endif(LINUX_STATIC)
 
 # include(include/seqan/CMakeLists.txt)

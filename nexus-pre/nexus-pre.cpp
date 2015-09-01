@@ -1,5 +1,3 @@
-#define SEQAN_PROFILE
-
 #include <seqan/bam_io.h>
 #include <seqan/bed_io.h>
 #include <seqan/seq_io.h>
@@ -11,12 +9,10 @@
 #include <boost/container/flat_map.hpp>
 #include <boost/container/flat_set.hpp>
 #include <algorithm>
+#include <chrono>
 
 #include "peak.h"
 #include "BamRecordKey.h"
-
-using seqan::_proFloat;
-using seqan::sysTime;
 
 struct Statistics
 {
@@ -240,7 +236,7 @@ int main(int argc, char const * argv[])
     Statistics stats;
 
     std::cout << "barcode filtering... ";
-    SEQAN_PROTIMESTART(loopTime);
+    auto t1 = std::chrono::steady_clock::now();
     seqan::BamAlignmentRecord record;
 
     seqan::BamHeader header;
@@ -285,13 +281,13 @@ int main(int argc, char const * argv[])
     saveBam.close();
     seqan::clear(keySet);
 
-    double loop = SEQAN_PROTIMEDIFF(loopTime);
-    std::cout << loop << "s" << std::endl;
+    auto t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
 
     const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
     if (filter)
     {
-        SEQAN_PROTIMESTART(loopTime);
+        t1 = std::chrono::steady_clock::now();
         std::cout << "filtering reads... ";
         unsigned clusterSize = 0;
         getOptionValue(clusterSize, parser, "f");
@@ -315,14 +311,13 @@ int main(int argc, char const * argv[])
         }
         saveBam2.close();
 
-        loop = SEQAN_PROTIMEDIFF(loopTime);
-        std::cout << loop << "s" << std::endl;
-
+        t2 = std::chrono::steady_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     }
 
     // occurenceMap = number of mappings for each location in genome
     // duplicationRate[x] = number of locations with x mappings
-    SEQAN_PROTIMESTART(finalProcessing);
+    t1 = std::chrono::steady_clock::now();
     std::cout << "calculating unique/non unique duplication Rate... ";
 
     SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedForwardStrand(outFilename + "_forward");
@@ -390,8 +385,8 @@ int main(int argc, char const * argv[])
         fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
         fs2 << i + 1 << "\t" << duplicationRateUnique[i]*(i+1) << "\t" << duplicationRate[i]*(i+1) <<std::endl;
     }
-    loop = SEQAN_PROTIMEDIFF(finalProcessing);
-    std::cout << loop << "s" << std::endl;
+    t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     duplicationRateUnique.clear();
     duplicationRate.clear();
 
@@ -405,7 +400,7 @@ int main(int argc, char const * argv[])
 
     if (peakCallingEnabled)
     {
-        SEQAN_PROTIMESTART(peakCandidatesTime);
+        t1 = std::chrono::steady_clock::now();
 
         double scoreLimit = 0.2;
         unsigned int halfWindowWidth = 30;
@@ -424,8 +419,8 @@ int main(int argc, char const * argv[])
         std::vector<PeakCandidate<OccurenceMap>> positionsVector;
 
         collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, halfWindowWidth, ratioTolerance, positionsVector);
-        loop = SEQAN_PROTIMEDIFF(peakCandidatesTime);
-        std::cout << loop << "s" << std::endl;
+        t2 = std::chrono::steady_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
         std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
 
         SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename + "_candidateScores");
