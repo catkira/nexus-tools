@@ -70,9 +70,9 @@ bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
 
 if results.exo:
- args = ("seqan_flexbar", results.input_file, "-tt", "-t", "-ss", "-st", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = ("seqan_flexbar", results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 else:
- args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
  #args = ("seqan_flexbar", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
