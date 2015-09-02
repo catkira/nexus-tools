@@ -35,7 +35,9 @@ print "Genome: " + results.genome
 #print results.output
 
 genomeFilename = results.genome
-bowtieLocation = results.bowtie_location + "/"
+bowtieLocation = results.bowtie_location
+if len(bowtieLocation) > 0:
+    bowtieLocation = bowtieLocation + "/"
 
 if(platform.system() == "Windows" and results.bowtie_location == ""):
  print "Bowtie location is required under windows"
