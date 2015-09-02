@@ -33,8 +33,6 @@ results, leftovers = parser.parse_known_args()
 print "Reads: " + results.input_file
 print "Genome: " + results.genome
 #print results.output
-if results.output_dir is not None:
- dataDir = os.path.abspath(results.output_dir) + "/"
 
 genomeFilename = results.genome
 bowtieLocation = results.bowtie_location + "/"
@@ -51,7 +49,14 @@ inFileExtension = "." + inFileExtension
 inFilenamePrefixWithoutPath = os.path.basename(inputFile)
 inFilenamePrefixWithoutPath, temp = inFilenamePrefixWithoutPath.split(os.extsep, 1)
 
-outputDir = dataDir + inFilenamePrefixWithoutPath
+if results.output_dir is not None:
+    outputDir = os.path.abspath(results.output_dir) 
+    head, tail = os.path.split(results.output_dir)
+    if len(tail) > 0: 
+        inFilenamePrefixWithoutPath = tail;
+    outputDir = outputDir + "/"
+else:
+    outputDir = inFilenamePrefixWithoutPath
 #output has to be fastq format, because bowtie does not support fastq.gz
 flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 
@@ -63,9 +68,9 @@ bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
 
 if results.exo:
- args = ("seqan_flexbar", results.input_file, "-tt", "-t", "-ss", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = ("seqan_flexbar", results.input_file, "-tt", "-t", "-ss", "-st", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 else:
- args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = ("seqan_flexbar", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-tnum", results.num_threads,"-er",flexbar_er, "-ol", flexbar_ol, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
  #args = ("seqan_flexbar", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
