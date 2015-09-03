@@ -210,16 +210,31 @@ int main(int argc, char const * argv[])
 
     std::cout << "calculating peak candidates...";
     t1 = std::chrono::steady_clock::now();
-    std::vector<PeakCandidate<OccurenceMap>> positionsVector;
+    
+    std::vector<PeakCandidate<OccurenceMap>> peakCandidatesVector;
 
-    collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, halfWindowWidth, ratioTolerance, positionsVector);
+    const auto range = Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end());
+    auto windowRange = range;
+    auto calcScore = [&range, halfWindowWidth, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange)
+        {return slidingWindowScore<OccurenceMap>(_it, range, halfWindowWidth, ratioTolerance, _tempSlidingWindowRange);};
+
+    collectForwardCandidates<OccurenceMap>(range, calcScore, scoreLimit, halfWindowWidth, peakCandidatesVector);
     t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
-    std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
+    std::cout << "found " << peakCandidatesVector.size() << " candidates" << std::endl;
 
     SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename);
     saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
-    forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
+    forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(peakCandidatesVector, saveBedCandidateScores, bamFileIn.context);
 
+    auto filter = [scoreLimit](const PeakCandidate<OccurenceMap>& peakCandidate)
+        {return peakCandidate.score > 10*scoreLimit ? true : false;};
+    std::map<unsigned int, unsigned int> bindingLengthDistribution;
+    calculateBindingLengthDistribution(peakCandidatesVector, filter, bindingLengthDistribution);
+    std::map<unsigned int, double> bindingCharacteristicsMap;
+    const int maxDistance = 50;
+    calculateScoreDistribution(peakCandidatesVector, calcScore, maxDistance, bindingCharacteristicsMap);
+    for (auto i = 0;i < maxDistance*2;++i)
+        std::cout << i << "\t" << bindingCharacteristicsMap[i] << std::endl;
 	return 0;
 }

@@ -31,13 +31,14 @@ struct DoubleStrandPosition : SingleStrandPosition
 template <typename TEdgeDistribution>
 struct PeakCandidate
 {
-    PeakCandidate() : score(0) {};
+    PeakCandidate() : score(0), width(0) {};
     void clear()
     {
         score = 0;
     }
     Range<TEdgeDistribution> range;
     typename TEdgeDistribution::const_iterator centerIt;
+    unsigned int width;
     double score;
 };
 
@@ -88,33 +89,69 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
     return score;    // assume return value optimization
 }
 
-template <typename TEdgeDistribution, typename TLambda>
-void plateauAdjustment(PeakCandidate<TEdgeDistribution>& peakCandidate, TLambda& calcScore)
+// range has to be within the same chromosome
+template <typename TRange, typename TLambda, typename TPeakCandidate>
+void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& peakCandidate)
 {
+    // assert range.first.chromosome == range.second.chromosome
     unsigned int plateauCount = 0;
-    Range<TEdgeDistribution> tempSlidingWindowRange;
-    auto prevIt = peakCandidate.centerIt;
-    for (typename TEdgeDistribution::const_iterator it = std::next(peakCandidate.centerIt,1); it != peakCandidate.range.second; prevIt = it++)
+    TRange tempSlidingWindowRange;
+    TRange plateauRange;
+    //const auto strand = getStrand(peakCandidate.centerIt->first);
+    auto prevIt = range.first;
+    plateauRange = range;
+    bool startDetected = false;
+    // maybe better use find_if
+    for (auto it = range.first; it != range.second; prevIt = it++)
     {
-        //if (getPosition(getKey(*prevIt)) == getPosition(getKey(*it)))
+        //if (getStrand(it->first) != strand)
         //    continue;
-        if (calcScore(it, tempSlidingWindowRange) > (peakCandidate.score * 0.9))
-            ++plateauCount;
-        else
+        if (getPosition<SingleStrandPosition>(*range.first).position > 2456589 && getPosition<SingleStrandPosition>(*range.first).position < 2456650)
+        {
+            std::cout << "startPos: " << getPosition<SingleStrandPosition>(*range.first).position 
+                << " endPos: " << getPosition<SingleStrandPosition>(*range.second).position
+                << " itPos: " << getPosition<SingleStrandPosition>(*it).position 
+                << " score: " << calcScore(it, tempSlidingWindowRange) << std::endl;
+        }
+
+        if (!startDetected && calcScore(it, tempSlidingWindowRange) > (peakCandidate.score * 0.9))
+        {
+            plateauRange.first = it;
+            startDetected = true;
+        }
+        else if (startDetected && calcScore(it, tempSlidingWindowRange) < (peakCandidate.score * 0.9))
+        {
+            plateauRange.second = prevIt;
             break;
+        }
     }
-    if (plateauCount > 0)
-        peakCandidate.centerIt = std::next(peakCandidate.centerIt, plateauCount / 2);
+    // find element which is closest to the center of plateauRange
+    const auto startPos = getPosition<SingleStrandPosition>(*plateauRange.first).position;
+    const auto endPos = getPosition<SingleStrandPosition>(*plateauRange.second).position;
+    const auto midPos = (startPos + endPos) / 2;
+    auto minPair = std::make_pair(midPos - startPos, plateauRange.first);
+
+    // can not use for_each here, because access to iterator is needed
+    for (auto it = plateauRange.first; it != plateauRange.second; ++it)
+    {
+        if (abs(midPos - getPosition<SingleStrandPosition>(*it).position) < minPair.first)
+            minPair.second = it;
+    }
+
+    if (startPos > 2456589 && startPos < 2456650)
+    {
+        std::cout << "startPos: " << startPos << " endPos: " << endPos << std::endl;
+    }
+    peakCandidate.width = endPos - startPos;
+    peakCandidate.centerIt = minPair.second;
 }
 
-template <typename TEdgeDistribution>
-void collectForwardCandidates(const Range<TEdgeDistribution> range,
-    const double scoreLimit, const unsigned halfWindowWidth, const double ratioTolerance, typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
+template <typename TEdgeDistribution, typename TCalcScore>
+void collectForwardCandidates(const Range<TEdgeDistribution> range, TCalcScore calcScore,
+    const double scoreLimit, const unsigned halfWindowWidth, typename std::vector<PeakCandidate<TEdgeDistribution>>& candidatePositions)
 {
     double tempScore = 0;
     int checkAhead = 0;
-    auto calcScore = [&range, halfWindowWidth, scoreLimit, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange) 
-        {return slidingWindowScore<TEdgeDistribution>(_it, range, halfWindowWidth, ratioTolerance, _tempSlidingWindowRange);};
     PeakCandidate<TEdgeDistribution> peakCandidate;
     Range<TEdgeDistribution> tempSlidingWindowRange;
     auto prevIt = range.first;
@@ -143,14 +180,21 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range,
         }
         if (peakCandidate.score > 0)    // checking finished
         {
-            //if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
+            PeakCandidate<TEdgeDistribution> prevPeakCandidate = peakCandidate;
+            plateauAdjustment(Range<TEdgeDistribution>(peakCandidate.range.first, peakCandidate.range.second), calcScore, peakCandidate);
+            //if (peakCandidate.centerIt != prevPeakCandidate.centerIt)
             //{
-            //    std::cout << "\npeak score: " << peakCandidate.score << std::endl;
-            //    std::cout << "pos before plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+            //    std::cout << "old center: " << getPosition(getKey(*prevPeakCandidate.centerIt))
+            //        << " new center: " << getPosition(getKey(*peakCandidate.centerIt))
+            //        << " width: " << peakCandidate.width << std::endl;
             //}
-            plateauAdjustment(peakCandidate, calcScore);
-            //if (getPosition(getKey(*peakCandidate.centerIt)) > 2456589 && getPosition(getKey(*peakCandidate.centerIt)) < 2456631)
-            //    std::cout << "pos after plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+            if (getPosition(getKey(*prevPeakCandidate.centerIt)) > 2456589 && getPosition(getKey(*prevPeakCandidate.centerIt)) < 2456650)
+            {
+                std::cout << "\npeak score: " << peakCandidate.score << std::endl;
+                std::cout << "pos before plateau adjustment: " << getPosition(getKey(*prevPeakCandidate.centerIt)) << std::endl;
+                std::cout << "pos after plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+                std::cout << " width: " << peakCandidate.width << std::endl;
+            }
             candidatePositions.push_back(peakCandidate);
             it = peakCandidate.range.second;
             tempScore = 0;
@@ -174,6 +218,29 @@ void forwardCandidatesToBed(const typename std::vector<PeakCandidate<TEdgeDistri
 
         writer.write(bedRecord);
     }
+}
+
+template <typename TPeakCandidatesVector, typename TSelector, typename TBindingLengthDistribution>
+void calculateBindingLengthDistribution(const TPeakCandidatesVector& peakCandidatesVector, TSelector selector, TBindingLengthDistribution& bindingLengthDistribution)
+{
+    for (const auto it : peakCandidatesVector)
+        if (selector(it))
+            ++bindingLengthDistribution[it.width];
+}
+
+template <typename TPeakCandidatesVector, typename TCalcScore, typename TScoreDistribution>
+void calculateScoreDistribution(const TPeakCandidatesVector& peakCandidatesVector, TCalcScore calcScore, const int maxDistance, TScoreDistribution& scoreDistribution)
+{
+    int distance = 0;
+    auto tempRange = peakCandidatesVector.begin()->range;
+    for (const auto it : peakCandidatesVector)
+        for (auto it2 = it.range.first; it2 != it.range.second; ++it2)
+        {
+            calculateDistance(getKey(*it2), getKey(*it.centerIt), distance);
+            if (abs(distance) > maxDistance)
+                continue;
+            scoreDistribution[distance + maxDistance] += calcScore(it2, tempRange);
+        }
 }
 
 template <typename TBedRecord>
