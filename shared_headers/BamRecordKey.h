@@ -44,21 +44,25 @@ struct BamRecordKey
             static_cast<uint64_t>((record.beginPos + static_cast<uint64_t>((isRev(record) == true ? length(record.seq) : 0)))) << 1 |
             static_cast<uint64_t>(isRev(record));
     };
+    __int32 getPosition() const
+    {
+        return static_cast<__int32>(pos) >> 1;
+    }
+    __int32 getRID() const
+    {
+        return static_cast<__int32>(pos >> 32);
+    }
+    bool isReverseStrand() const
+    {
+        return (pos & 0x01) != 0;
+    }
     typedef CompareBamRecordKey<WithBarcode> TCompareBamRecordKey;
+private:
+    template <typename THasBarcode>
+    friend struct CompareBamRecordKey;
     uint64_t pos;
 };
 
-template <typename THasBarcode>
-__int32 getPosition(const BamRecordKey<THasBarcode>& bamRecordKey)
-{
-    return static_cast<__int32>(bamRecordKey.pos) >> 1;
-}
-
-template <typename THasBarcode>
-__int32 getStrand(const BamRecordKey<THasBarcode>& bamRecordKey)
-{
-    return static_cast<__int32>(bamRecordKey.pos >> 32);
-}
 
 template <>
 struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
@@ -82,12 +86,12 @@ struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
 template <typename THasBarcode>
 bool calculateDistance(const BamRecordKey<THasBarcode>& key1, const BamRecordKey<THasBarcode>& key2, int& distance)
 {
-    if ((key1.pos & 0xFFFFFFFF00000000) != (key2.pos & 0xFFFFFFFF00000000))
+    if (key1.getRID() != key2.getRID())
     {
         //distance = 0;
         return false;
     }
-    distance = (static_cast<__int32>(key2.pos) >> 1) - (static_cast<__int32>(key1.pos) >> 1);
+    distance = key2.getPosition() - key1.getPosition();
     return true;
 }
 

@@ -177,11 +177,6 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
-bool isReverseStrand(const OccurenceMap::value_type& val)
-{
-    return (val.first.pos & 0x01) != 0;
-}
-
 template <typename TPosition>
 TPosition getPosition(const OccurenceMap::value_type& val)
 {
@@ -336,19 +331,19 @@ int main(int argc, char const * argv[])
     {
         if (bedOutputEnabled)
         {
-            bedRecord.rID = static_cast<int32_t>(val.first.pos >> 32);
+            bedRecord.rID = getKey(val).getRID();
             bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-            if (val.first.pos & 0x01)    // reverse strand
+            if (getKey(val).isReverseStrand())    // reverse strand
             {
                 // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
-                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1) - 1; 
+                bedRecord.beginPos = getKey(val).getPosition();
                 bedRecord.endPos = bedRecord.beginPos + 1;
                 bedRecord.name = std::to_string(-static_cast<int32_t>(val.second.second)); // abuse name as val parameter in BedGraph
                 saveBedReverseStrand.write(bedRecord);
             }
             else    // forward strand
             {
-                bedRecord.beginPos = (static_cast<int32_t>(val.first.pos) >> 1);
+                bedRecord.beginPos = getKey(val).getPosition();
                 bedRecord.endPos = bedRecord.beginPos + 1;
                 bedRecord.name = std::to_string(val.second.second); // abuse name as val parameter in BedGraph
                 saveBedForwardStrand.write(bedRecord);

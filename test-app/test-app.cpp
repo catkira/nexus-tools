@@ -124,158 +124,144 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
-bool isReverseStrand(const OccurenceMap::value_type& val)
-{
-    return (val.first.pos & 0x01) != 0;
-}
-
-template <typename TPosition>
-TPosition getPosition(const OccurenceMap::value_type& val)
-{
-    TPosition position;
-    position.chromosomeID = static_cast<__int32>(val.first.pos >> 32);
-    position.position = static_cast<__int32>(val.first.pos) >> 1;
-    return position;    // assume return value optimization
-}
-
 int main(int argc, char const * argv[])
 {
     // Additional checks
-    auto desc = buildParser();
-    
-    po::positional_options_description p;
-    p.add("input-file", -1);
-    po::variables_map vm;
-    po::store(po::command_line_parser(argc, argv).
-        options(desc).positional(p).run(), vm);
-    po::notify(vm);
-
-    if (vm.count("help")) {
-        std::cout << desc << "\n";
-        return 1;
-    }
-
-    // Check if one or two input files (single or paired-end) were given.
-    if (vm.count("input-file") < 1)
-    {
-        std::cout << desc << "\n";
-        return 1;
-    }
-
-    if(vm["input-file"].as< std::vector<std::string> >().size() < 2)
-    {
-        std::cout << desc << "\n";
-        return 1;
-    }
-
-    const auto fileName1  = vm["input-file"].as< std::vector<std::string> >()[0];
-    const auto fileName2 = vm["input-file"].as< std::vector<std::string> >()[1];
-
-    // Open input file, BamFileIn can read SAM and BAM files.
-    seqan::BamFileIn bamFileIn(fileName1.c_str());
-
-    std::string outFilename;
-
-    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
-    OccurenceMap occurenceMap;
-
-    Statistics stats;
-
-    std::cout << "barcode filtering... ";
-    auto t1 = std::chrono::steady_clock::now();
-    seqan::BamAlignmentRecord record;
-
-    seqan::BamHeader header;
-    readHeader(header, bamFileIn);
-
-    SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
-
-    unsigned tagID = 0;
-
-    while (!atEnd(bamFileIn))
-    {
-        readRecord(record, bamFileIn);
-        ++stats.totalReads;
-        const seqan::BamTagsDict tags(record.tags);
-        if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
-        {
-            __int32 tagValue = 0;
-            extractTagValue(tagValue, tags, tagID);
-            if (tagValue == 0)
-                ++stats.couldNotMap;
-            else
-                ++stats.couldNotMapUniquely;
-        }
-        if (record.flag != 0x00 && record.flag != 0x10)
-            continue;
-
-        ++stats.totalMappedReads;
-        const BamRecordKey<WithBarcode> key(record);
-        const BamRecordKey<NoBarcode> pos(record);
-        const auto insertResult = keySet.insert(std::move(key));
-        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
-        if (!insertResult.second)  // element was not inserted because it existed already
-            ++stats.removedReads;
-        else
-        {
-            saveBam.write(record);
-            ++mapItem.second; // unique hits
-        }
-        // non unique hits
-        ++mapItem.first;
-    }
-    saveBam.close();
-    seqan::clear(keySet);
-
-    auto t2 = std::chrono::steady_clock::now();
-    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
-
-    const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
-
-    // occurenceMap = number of mappings for each location in genome
-    // duplicationRate[x] = number of locations with x mappings
-    t1 = std::chrono::steady_clock::now();
-    std::cout << "calculating unique/non unique duplication Rate... ";
-
-
-    seqan::BedRecord<seqan::Bed4> bedRecord;
-
-    std::vector<unsigned> duplicationRateUnique;
-    std::vector<unsigned> duplicationRate;
-    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMap::value_type& val)
-    {
-        if (duplicationRateUnique.size() < val.second.second)
-            duplicationRateUnique.resize(val.second.second);
-        ++duplicationRateUnique[val.second.second - 1];
-        if (duplicationRate.size() < val.second.first)
-            duplicationRate.resize(val.second.first);
-        ++duplicationRate[val.second.first - 1];
-    });
-
-    std::fstream fs, fs2, fs3;
-#ifdef _MSC_VER
-    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
-    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out, _SH_DENYNO);
-#else
-    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out);
-    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out);
-#endif
-    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
-    fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
-    unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
-    duplicationRateUnique.resize(maxLen);
-    std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
-    for (unsigned i = 0; i < maxLen;++i)
-    {
-        if (i > 0)
-            stats.totalSamePositionReads += (duplicationRate[i] * (i));
-        //std::cout << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << std::endl;
-        fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
-        fs2 << i + 1 << "\t" << duplicationRateUnique[i] * (i + 1) << "\t" << duplicationRate[i] * (i + 1) << std::endl;
-    }
-    t2 = std::chrono::steady_clock::now();
-    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
-    duplicationRateUnique.clear();
-    duplicationRate.clear();
+//    auto desc = buildParser();
+//    
+//    po::positional_options_description p;
+//    p.add("input-file", -1);
+//    po::variables_map vm;
+//    po::store(po::command_line_parser(argc, argv).
+//        options(desc).positional(p).run(), vm);
+//    po::notify(vm);
+//
+//    if (vm.count("help")) {
+//        std::cout << desc << "\n";
+//        return 1;
+//    }
+//
+//    // Check if one or two input files (single or paired-end) were given.
+//    if (vm.count("input-file") < 1)
+//    {
+//        std::cout << desc << "\n";
+//        return 1;
+//    }
+//
+//    if(vm["input-file"].as< std::vector<std::string> >().size() < 2)
+//    {
+//        std::cout << desc << "\n";
+//        return 1;
+//    }
+//
+//    const auto fileName1  = vm["input-file"].as< std::vector<std::string> >()[0];
+//    const auto fileName2 = vm["input-file"].as< std::vector<std::string> >()[1];
+//
+//    // Open input file, BamFileIn can read SAM and BAM files.
+//    seqan::BamFileIn bamFileIn(fileName1.c_str());
+//
+//    std::string outFilename;
+//
+//    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
+//    OccurenceMap occurenceMap;
+//
+//    Statistics stats;
+//
+//    std::cout << "barcode filtering... ";
+//    auto t1 = std::chrono::steady_clock::now();
+//    seqan::BamAlignmentRecord record;
+//
+//    seqan::BamHeader header;
+//    readHeader(header, bamFileIn);
+//
+//    SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
+//
+//    unsigned tagID = 0;
+//
+//    while (!atEnd(bamFileIn))
+//    {
+//        readRecord(record, bamFileIn);
+//        ++stats.totalReads;
+//        const seqan::BamTagsDict tags(record.tags);
+//        if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
+//        {
+//            __int32 tagValue = 0;
+//            extractTagValue(tagValue, tags, tagID);
+//            if (tagValue == 0)
+//                ++stats.couldNotMap;
+//            else
+//                ++stats.couldNotMapUniquely;
+//        }
+//        if (record.flag != 0x00 && record.flag != 0x10)
+//            continue;
+//
+//        ++stats.totalMappedReads;
+//        const BamRecordKey<WithBarcode> key(record);
+//        const BamRecordKey<NoBarcode> pos(record);
+//        const auto insertResult = keySet.insert(std::move(key));
+//        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
+//        if (!insertResult.second)  // element was not inserted because it existed already
+//            ++stats.removedReads;
+//        else
+//        {
+//            saveBam.write(record);
+//            ++mapItem.second; // unique hits
+//        }
+//        // non unique hits
+//        ++mapItem.first;
+//    }
+//    saveBam.close();
+//    seqan::clear(keySet);
+//
+//    auto t2 = std::chrono::steady_clock::now();
+//    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+//
+//    const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
+//
+//    // occurenceMap = number of mappings for each location in genome
+//    // duplicationRate[x] = number of locations with x mappings
+//    t1 = std::chrono::steady_clock::now();
+//    std::cout << "calculating unique/non unique duplication Rate... ";
+//
+//
+//    seqan::BedRecord<seqan::Bed4> bedRecord;
+//
+//    std::vector<unsigned> duplicationRateUnique;
+//    std::vector<unsigned> duplicationRate;
+//    std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMap::value_type& val)
+//    {
+//        if (duplicationRateUnique.size() < val.second.second)
+//            duplicationRateUnique.resize(val.second.second);
+//        ++duplicationRateUnique[val.second.second - 1];
+//        if (duplicationRate.size() < val.second.first)
+//            duplicationRate.resize(val.second.first);
+//        ++duplicationRate[val.second.first - 1];
+//    });
+//
+//    std::fstream fs, fs2, fs3;
+//#ifdef _MSC_VER
+//    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out, _SH_DENYNO);
+//    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out, _SH_DENYNO);
+//#else
+//    fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out);
+//    fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out);
+//#endif
+//    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
+//    fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
+//    unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
+//    duplicationRateUnique.resize(maxLen);
+//    std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
+//    for (unsigned i = 0; i < maxLen;++i)
+//    {
+//        if (i > 0)
+//            stats.totalSamePositionReads += (duplicationRate[i] * (i));
+//        //std::cout << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << std::endl;
+//        fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
+//        fs2 << i + 1 << "\t" << duplicationRateUnique[i] * (i + 1) << "\t" << duplicationRate[i] * (i + 1) << std::endl;
+//    }
+//    t2 = std::chrono::steady_clock::now();
+//    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+//    duplicationRateUnique.clear();
+//    duplicationRate.clear();
     return 0;
 }

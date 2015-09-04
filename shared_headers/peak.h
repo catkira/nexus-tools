@@ -8,25 +8,44 @@
 template<typename TContainer>
 using Range = std::pair<typename TContainer::const_iterator, typename TContainer::const_iterator>;
 
-struct SingleStrandPosition
+template <typename TBedRecord>
+struct SaveBed
 {
-    const int INVALID_ID = -1;
-    const int INVALID_POSITION = -1;
-
-    SingleStrandPosition() :
-        chromosomeID(INVALID_ID), position(INVALID_POSITION) {};
-
-    int chromosomeID;
-    int position;
+    using BedRecord = TBedRecord;
+    SaveBed(const std::string& filename) : bedFileOut()
+    {
+        if (!open(bedFileOut, (filename + ".bed").c_str()))
+        {
+            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
+            return;
+        }
+    }
+    void write(TBedRecord& record)
+    {
+        writeRecord(bedFileOut, record);
+    }
+    void writeHeader(const seqan::CharString& header)
+    {
+        seqan::write(bedFileOut.iter, header);
+    }
+    void close()
+    {
+        seqan::close(bedFileOut);
+    }
+    seqan::BedFileOut bedFileOut;
 };
 
-struct DoubleStrandPosition : SingleStrandPosition
-{
-    DoubleStrandPosition() :
-        SingleStrandPosition(), reverseStrand(false) {};
-
-    bool reverseStrand;
-};
+//struct SingleStrandPosition
+//{
+//    const int INVALID_ID = -1;
+//    const int INVALID_POSITION = -1;
+//
+//    SingleStrandPosition() :
+//        chromosomeID(INVALID_ID), position(INVALID_POSITION) {};
+//
+//    int chromosomeID;
+//    int position;
+//};
 
 template <typename TEdgeDistribution>
 struct PeakCandidate
@@ -56,7 +75,7 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
     bool ok = false;
     while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
     {
-        if (isReverseStrand(*runningIt))
+        if (getKey(*runningIt).isReverseStrand())
             score -= getUniqueFrequency(*runningIt);
         else
             score += getUniqueFrequency(*runningIt);
@@ -71,18 +90,21 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
     windowRange.second = centerIt;
     while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
     {
-        if (isReverseStrand(*runningIt))
+        if (getKey(*runningIt).isReverseStrand())
             score += getUniqueFrequency(*runningIt);
         else
             score -= getUniqueFrequency(*runningIt);
         windowRange.second = runningIt++;
     }
-    double ratio = static_cast<double>(score - half1score) / static_cast<double>(half1score);
-    if (ratio < (1 - ratioTolerance) || ratio >(1 + ratioTolerance))
+    if (ratioTolerance != 0)
     {
-        //if (getPosition(getKey(*centerIt)) > 2456589 && getPosition(getKey(*centerIt)) < 2456631)
-        //    std::cout << "ratio fail: " << ratio <<std::endl;
-        return 0;
+        double ratio = static_cast<double>(score - half1score) / static_cast<double>(half1score);
+        if (ratio < (1 - ratioTolerance) || ratio >(1 + ratioTolerance))
+        {
+            //if (getPosition(getKey(*centerIt)) > 2456589 && getPosition(getKey(*centerIt)) < 2456631)
+            //    std::cout << "ratio fail: " << ratio <<std::endl;
+            return 0;
+        }
     }
     if (!ok) // score across chromosomes is not supported
         return 0;
@@ -106,11 +128,11 @@ void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& 
     {
         //if (getStrand(it->first) != strand)
         //    continue;
-        if (getPosition<SingleStrandPosition>(*range.first).position > 2456589 && getPosition<SingleStrandPosition>(*range.first).position < 2456650)
+        if (getKey(*range.first).getPosition() > 2456589 && getKey(*range.first).getPosition() < 2456650)
         {
-            std::cout << "startPos: " << getPosition<SingleStrandPosition>(*range.first).position 
-                << " endPos: " << getPosition<SingleStrandPosition>(*range.second).position
-                << " itPos: " << getPosition<SingleStrandPosition>(*it).position 
+            std::cout << "startPos: " << getKey(*range.first).getPosition()
+                << " endPos: " << getKey(*range.second).getPosition()
+                << " itPos: " << getKey(*it).getPosition()
                 << " score: " << calcScore(it, tempSlidingWindowRange) << std::endl;
         }
 
@@ -126,15 +148,15 @@ void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& 
         }
     }
     // find element which is closest to the center of plateauRange
-    const auto startPos = getPosition<SingleStrandPosition>(*plateauRange.first).position;
-    const auto endPos = getPosition<SingleStrandPosition>(*plateauRange.second).position;
+    const auto startPos = getKey(*plateauRange.first).getPosition();
+    const auto endPos = getKey(*plateauRange.second).getPosition();
     const auto midPos = (startPos + endPos) / 2;
     auto minPair = std::make_pair(midPos - startPos, plateauRange.first);
 
     // can not use for_each here, because access to iterator is needed
     for (auto it = plateauRange.first; it != plateauRange.second; ++it)
     {
-        if (abs(midPos - getPosition<SingleStrandPosition>(*it).position) < minPair.first)
+        if (abs(midPos - getKey(*it).getPosition()) < minPair.first)
             minPair.second = it;
     }
 
@@ -188,11 +210,11 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range, TCalcScore c
             //        << " new center: " << getPosition(getKey(*peakCandidate.centerIt))
             //        << " width: " << peakCandidate.width << std::endl;
             //}
-            if (getPosition(getKey(*prevPeakCandidate.centerIt)) > 2456589 && getPosition(getKey(*prevPeakCandidate.centerIt)) < 2456650)
+            if (getKey(*prevPeakCandidate.centerIt).getPosition() > 2456589 && getKey(*prevPeakCandidate.centerIt).getPosition() < 2456650)
             {
                 std::cout << "\npeak score: " << peakCandidate.score << std::endl;
-                std::cout << "pos before plateau adjustment: " << getPosition(getKey(*prevPeakCandidate.centerIt)) << std::endl;
-                std::cout << "pos after plateau adjustment: " << getPosition(getKey(*peakCandidate.centerIt)) << std::endl;
+                std::cout << "pos before plateau adjustment: " << getKey(*prevPeakCandidate.centerIt).getPosition() << std::endl;
+                std::cout << "pos after plateau adjustment: " << getKey(*peakCandidate.centerIt).getPosition() << std::endl;
                 std::cout << " width: " << peakCandidate.width << std::endl;
             }
             candidatePositions.push_back(peakCandidate);
@@ -210,9 +232,9 @@ void forwardCandidatesToBed(const typename std::vector<PeakCandidate<TEdgeDistri
     typename TWriter::BedRecord bedRecord;
     for (const auto& element : candidatePositions)
     {
-        bedRecord.rID = static_cast<int32_t>(element.centerIt->first.pos >> 32);
+        bedRecord.rID = element.centerIt->first.getRID();
         bedRecord.ref = contigNames(context)[bedRecord.rID];    // ADL
-        bedRecord.beginPos = (static_cast<int32_t>(element.centerIt->first.pos) >> 1) - 1;
+        bedRecord.beginPos = element.centerIt->first.getPosition();
         bedRecord.endPos = bedRecord.beginPos + 1;
         bedRecord.name = std::to_string(element.score); // abuse name as score parameter in BedGraph
 
@@ -243,32 +265,55 @@ void calculateScoreDistribution(const TPeakCandidatesVector& peakCandidatesVecto
         }
 }
 
-template <typename TBedRecord>
-struct SaveBed
+template <typename TEdgeDistribution, typename TLengthDistribution>
+void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
 {
-    using BedRecord = TBedRecord;
-    SaveBed(const std::string& filename) : bedFileOut()
+    const auto maxDistance = lengthDistribution.size();
+    seqan::BedRecord<seqan::Bed4> bedRecord;
+                // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBed("P:\\length20Frags");
+    for (auto it = edgeDistribution.begin(); it != edgeDistribution.end(); ++it)
     {
-        if (!open(bedFileOut, (filename + ".bed").c_str()))
+        auto tempIt = std::next(it, 1);
+        int distance = 0;
+        if (getKey(*it).isReverseStrand())
+            continue;
+        bedRecord.rID = getKey(*it).getRID();
+        bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
+        while (calculateDistance(getKey(*it), getKey(*tempIt), distance))
         {
-            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
-            return;
+            if (distance > maxDistance)
+                break;
+            if (getKey(*tempIt).isReverseStrand())
+            {
+                //lengthDistribution[distance] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
+                if (distance == 20)
+                {
+                    bedRecord.beginPos = getKey(*it).getPosition();
+                    bedRecord.endPos = getKey(*tempIt).getPosition();
+                    bedRecord.name = std::to_string(getUniqueFrequency(*it) * getUniqueFrequency(*tempIt)); // abuse name as val parameter in BedGraph
+                    saveBed.write(bedRecord);
+                }
+
+                lengthDistribution[distance] ++;
+            }
+            tempIt++;
         }
     }
-    void write(TBedRecord& record)
+}
+
+template <typename TEdgeDistribution, typename TCalcScore, typename TScoreDistribution>
+void calculateScoreDistribution2(const TEdgeDistribution& edgeDistribution, TCalcScore calcScore, const int maxDistance, TScoreDistribution& scoreDistribution)
+{
+    int distance = 0;
+    auto tempRange = Range<TEdgeDistribution>(edgeDistribution.begin(), edgeDistribution.end());
+
+    for (unsigned int width = 0; width < 50; ++width)
     {
-        writeRecord(bedFileOut, record);
+        for (auto it = edgeDistribution.begin(); it != edgeDistribution.end(); ++it)
+            scoreDistribution[width] += calcScore(it, tempRange, width);
     }
-    void writeHeader(const seqan::CharString& header)
-    {
-        seqan::write(bedFileOut.iter, header);
-    }
-    void close()
-    {
-        seqan::close(bedFileOut);
-    }
-    seqan::BedFileOut bedFileOut;
-};
+}
 
 
 #endif  // #ifndef PEAK_H_

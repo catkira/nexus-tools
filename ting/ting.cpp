@@ -119,17 +119,12 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
-bool isReverseStrand(const OccurenceMap::value_type& val)
-{
-    return (val.first.pos & 0x01) != 0;
-}
-
 template <typename TPosition>
 TPosition getPosition(const OccurenceMap::value_type& val)
 {
     TPosition position;
-    position.chromosomeID = static_cast<__int32>(val.first.pos >> 32);
-    position.position = static_cast<__int32>(val.first.pos) >> 1;
+    position.chromosomeID = val.first.getRID();
+    position.position = val.first.getPosition();
     return position;    // assume return value optimization
 }
 
@@ -215,7 +210,7 @@ int main(int argc, char const * argv[])
 
     const auto range = Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end());
     auto windowRange = range;
-    auto calcScore = [&range, halfWindowWidth, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange)
+    auto calcScore = [&range, ratioTolerance, halfWindowWidth](const auto _it, auto& _tempSlidingWindowRange)
         {return slidingWindowScore<OccurenceMap>(_it, range, halfWindowWidth, ratioTolerance, _tempSlidingWindowRange);};
 
     collectForwardCandidates<OccurenceMap>(range, calcScore, scoreLimit, halfWindowWidth, peakCandidatesVector);
@@ -230,11 +225,28 @@ int main(int argc, char const * argv[])
     auto filter = [scoreLimit](const PeakCandidate<OccurenceMap>& peakCandidate)
         {return peakCandidate.score > 10*scoreLimit ? true : false;};
     std::map<unsigned int, unsigned int> bindingLengthDistribution;
-    calculateBindingLengthDistribution(peakCandidatesVector, filter, bindingLengthDistribution);
+    //calculateBindingLengthDistribution(peakCandidatesVector, filter, bindingLengthDistribution);
     std::map<unsigned int, double> bindingCharacteristicsMap;
-    const int maxDistance = 50;
-    calculateScoreDistribution(peakCandidatesVector, calcScore, maxDistance, bindingCharacteristicsMap);
-    for (auto i = 0;i < maxDistance*2;++i)
-        std::cout << i << "\t" << bindingCharacteristicsMap[i] << std::endl;
-	return 0;
+    const int maxDistance = 100;
+    //calculateScoreDistribution(peakCandidatesVector, calcScore, maxDistance, bindingCharacteristicsMap);
+    //auto calcScoreWidth = [&range, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange, auto _halfWindowWidth)
+    //{return slidingWindowScore<OccurenceMap>(_it, range, _halfWindowWidth, 0, _tempSlidingWindowRange);};
+    //calculateScoreDistribution2(occurenceMap, calcScoreWidth, maxDistance, bindingCharacteristicsMap);
+    std::fstream fs;
+#ifdef _MSC_VER
+    fs.open(getFilePrefix(argv[1]) + "lengthDistribution.txt", std::fstream::out, _SH_DENYNO);
+#else
+    fs.open(getFilePrefix(argv[1]) + "lengthDistribution.txt", std::fstream::out);
+#endif
+
+    std::vector<unsigned int> lengthDistribution;
+    lengthDistribution.resize(maxDistance);
+    calculateQFragLengthDistribution(occurenceMap, lengthDistribution, bamFileIn);
+    for (auto i = 0;i < maxDistance;++i)
+    {
+        std::cout << i << "\t" << lengthDistribution[i] << "\t" << std::endl;
+        fs << i << "\t" << lengthDistribution[i] << "\t" << std::endl;
+    }
+    fs.close();
+    return 0;
 }
