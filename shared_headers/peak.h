@@ -286,7 +286,7 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
                 break;
             if (getKey(*tempIt).isReverseStrand())
             {
-                //lengthDistribution[distance] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
+                lengthDistribution[distance] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
                 if (distance == 20)
                 {
                     bedRecord.beginPos = getKey(*it).getPosition();
@@ -295,7 +295,7 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
                     saveBed.write(bedRecord);
                 }
 
-                lengthDistribution[distance] ++;
+                //lengthDistribution[distance] ++;
             }
             tempIt++;
         }

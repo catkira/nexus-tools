@@ -242,7 +242,7 @@ int main(int argc, char const * argv[])
     std::vector<unsigned int> lengthDistribution;
     lengthDistribution.resize(maxDistance);
     calculateQFragLengthDistribution(occurenceMap, lengthDistribution, bamFileIn);
-    for (auto i = 0;i < maxDistance;++i)
+    for (auto i = 1;i < maxDistance;++i)
     {
         std::cout << i << "\t" << lengthDistribution[i] << "\t" << std::endl;
         fs << i << "\t" << lengthDistribution[i] << "\t" << std::endl;
