@@ -165,7 +165,7 @@ struct SaveBam
 };
 
 
-typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>, CompareBamRecordKey<NoBarcode>> OccurenceMap;
+typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>> OccurenceMap;
 
 BamRecordKey<NoBarcode> getKey(const OccurenceMap::value_type& val)
 {
@@ -225,7 +225,7 @@ int main(int argc, char const * argv[])
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
     const bool peakCallingEnabled = seqan::isSet(parser, "p");
 
-    std::set<BamRecordKey<WithBarcode>, CompareBamRecordKey<WithBarcode>> keySet;
+    std::set<BamRecordKey<WithBarcode>> keySet;
     OccurenceMap occurenceMap;
 
     Statistics stats;

@@ -107,7 +107,7 @@ std::string getFilePrefix(const std::string& fileName, const bool withPath = tru
     return fileName.substr(found2 + 1, found - found2);
 }
 
-typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>, CompareBamRecordKey<NoBarcode>> OccurenceMap;
+typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>> OccurenceMap;
 
 BamRecordKey<NoBarcode> getKey(const OccurenceMap::value_type& val)
 {

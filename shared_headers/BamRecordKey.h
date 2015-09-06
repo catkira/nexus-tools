@@ -12,31 +12,6 @@ typename std::enable_if<
     >::value
 >::type;
 
-//template <typename THasBarcode>
-//struct CompareBamRecordKey
-//{
-//    template <typename TBamRecordKey>
-//    bool operator()(const TBamRecordKey &lhs, const TBamRecordKey& rhs) const
-//    {
-//        return lhs.pos < rhs.pos;
-//    }
-//};
-//
-//template <>
-//struct CompareBamRecordKey<WithBarcode>
-//{
-//    template <typename TBamRecordKey>
-//    bool operator()(const TBamRecordKey &lhs, const TBamRecordKey& rhs) const
-//    {
-//        if (lhs.pos != rhs.pos)
-//            return lhs.pos < rhs.pos;
-//        if (lhs.barcode.empty() == false && rhs.barcode.empty() == false
-//            && lhs.barcode != rhs.barcode)
-//            return lhs.barcode < rhs.barcode;
-//        return false;
-//    }
-//};
-
 bool isRev(const seqan::BamAlignmentRecord &record)
 {
     return (record.flag & 0x10) != 0;
@@ -75,17 +50,20 @@ struct BamRecordKey
     {
         return (pos & 0x01) != 0;
     }
+    bool friend operator<(const BamRecordKey<NoBarcode>& lhs, const BamRecordKey<NoBarcode>& rhs)
+    {
+        return lhs.pos < rhs.pos;
+    }
+
+    bool friend operator==(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
+    {
+        return rhs.pos == lhs.pos;
+    }
 private:
     template <typename THasBarcode>
     friend struct CompareBamRecordKey;
-    bool friend operator<(const BamRecordKey<NoBarcode>& lhs, const BamRecordKey<NoBarcode>& rhs);
     uint64_t pos;
 };
-
-bool operator<(const BamRecordKey<NoBarcode>& lhs, const BamRecordKey<NoBarcode>& rhs)
-{
-    return lhs.pos < rhs.pos;
-}
 
 template <>
 struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
@@ -102,20 +80,18 @@ struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
             posEnd = idString.length();
         barcode = idString.substr(posStart, posEnd - posStart);
     }
+    bool friend operator<(const BamRecordKey<WithBarcode>& lhs, const BamRecordKey<WithBarcode>& rhs)
+    {
+        if (operator<(static_cast<const BamRecordKey<NoBarcode>&>(lhs), static_cast<const BamRecordKey<NoBarcode>&>(rhs)))
+            return true;
+        if (lhs.barcode.empty() == false && rhs.barcode.empty() == false
+            && lhs.barcode != rhs.barcode)
+            return lhs.barcode < rhs.barcode;
+        return false;
+    }
 private:
     std::string barcode;
-    bool friend operator<(const BamRecordKey<WithBarcode>& lhs, const BamRecordKey<WithBarcode>& rhs);
 };
-
-bool operator<(const BamRecordKey<WithBarcode>& lhs, const BamRecordKey<WithBarcode>& rhs)
-{
-    if (operator<(static_cast<BamRecordKey<NoBarcode>>(lhs), static_cast<BamRecordKey<NoBarcode>>(rhs)))
-        return true;
-    if (lhs.barcode.empty() == false && rhs.barcode.empty() == false
-        && lhs.barcode != rhs.barcode)
-        return lhs.barcode < rhs.barcode;
-    return false;
-}
 
 // returns false if keys are from different chromosomes
 template <typename THasBarcode>
