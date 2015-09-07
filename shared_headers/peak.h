@@ -73,7 +73,7 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
     if (centerIt == range.first)
         return 0;
     bool ok = false;
-    while (runningIt != range.first && (ok = calculateDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
+    while (runningIt != range.first && (ok = calculate5EndDistance(getKey(*runningIt), getKey(*centerIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
     {
         if (getKey(*runningIt).isReverseStrand())
             score -= getUniqueFrequency(*runningIt);
@@ -88,7 +88,7 @@ double slidingWindowScore(const typename TEdgeDistribution::const_iterator cente
         return 0;
     half1score = score;
     windowRange.second = centerIt;
-    while (runningIt != range.second && (ok = calculateDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
+    while (runningIt != range.second && (ok = calculate5EndDistance(getKey(*centerIt), getKey(*runningIt), distance)) && distance <= static_cast<signed>(halfWindowWidth))
     {
         if (getKey(*runningIt).isReverseStrand())
             score += getUniqueFrequency(*runningIt);
@@ -128,11 +128,11 @@ void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& 
     {
         //if (getStrand(it->first) != strand)
         //    continue;
-        if (getKey(*range.first).getPosition() > 2456589 && getKey(*range.first).getPosition() < 2456650)
+        if (getKey(*range.first).get5EndPosition() > 2456589 && getKey(*range.first).get5EndPosition() < 2456650)
         {
-            std::cout << "startPos: " << getKey(*range.first).getPosition()
-                << " endPos: " << getKey(*range.second).getPosition()
-                << " itPos: " << getKey(*it).getPosition()
+            std::cout << "startPos: " << getKey(*range.first).get5EndPosition()
+                << " endPos: " << getKey(*range.second).get5EndPosition()
+                << " itPos: " << getKey(*it).get5EndPosition()
                 << " score: " << calcScore(it, tempSlidingWindowRange) << std::endl;
         }
 
@@ -148,15 +148,15 @@ void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& 
         }
     }
     // find element which is closest to the center of plateauRange
-    const auto startPos = getKey(*plateauRange.first).getPosition();
-    const auto endPos = getKey(*plateauRange.second).getPosition();
+    const auto startPos = getKey(*plateauRange.first).get5EndPosition();
+    const auto endPos = getKey(*plateauRange.second).get5EndPosition();
     const auto midPos = (startPos + endPos) / 2;
     auto minPair = std::make_pair(midPos - startPos, plateauRange.first);
 
     // can not use for_each here, because access to iterator is needed
     for (auto it = plateauRange.first; it != plateauRange.second; ++it)
     {
-        if (abs(midPos - getKey(*it).getPosition()) < minPair.first)
+        if (abs(midPos - getKey(*it).get5EndPosition()) < minPair.first)
             minPair.second = it;
     }
 
@@ -210,11 +210,11 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range, TCalcScore c
             //        << " new center: " << getPosition(getKey(*peakCandidate.centerIt))
             //        << " width: " << peakCandidate.width << std::endl;
             //}
-            if (getKey(*prevPeakCandidate.centerIt).getPosition() > 2456589 && getKey(*prevPeakCandidate.centerIt).getPosition() < 2456650)
+            if (getKey(*prevPeakCandidate.centerIt).get5EndPosition() > 2456589 && getKey(*prevPeakCandidate.centerIt).get5EndPosition() < 2456650)
             {
                 std::cout << "\npeak score: " << peakCandidate.score << std::endl;
-                std::cout << "pos before plateau adjustment: " << getKey(*prevPeakCandidate.centerIt).getPosition() << std::endl;
-                std::cout << "pos after plateau adjustment: " << getKey(*peakCandidate.centerIt).getPosition() << std::endl;
+                std::cout << "pos before plateau adjustment: " << getKey(*prevPeakCandidate.centerIt).get5EndPosition() << std::endl;
+                std::cout << "pos after plateau adjustment: " << getKey(*peakCandidate.centerIt).get5EndPosition() << std::endl;
                 std::cout << " width: " << peakCandidate.width << std::endl;
             }
             candidatePositions.push_back(peakCandidate);
@@ -234,7 +234,7 @@ void forwardCandidatesToBed(const typename std::vector<PeakCandidate<TEdgeDistri
     {
         bedRecord.rID = element.centerIt->first.getRID();
         bedRecord.ref = contigNames(context)[bedRecord.rID];    // ADL
-        bedRecord.beginPos = element.centerIt->first.getPosition();
+        bedRecord.beginPos = element.centerIt->first.get5EndPosition();
         bedRecord.endPos = bedRecord.beginPos + 1;
         bedRecord.name = std::to_string(element.score); // abuse name as score parameter in BedGraph
 
@@ -280,7 +280,7 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
             continue;
         bedRecord.rID = getKey(*it).getRID();
         bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-        while (calculateDistance(getKey(*it), getKey(*tempIt), distance))
+        while (calculate5EndDistance(getKey(*it), getKey(*tempIt), distance))
         {
             if (distance > maxDistance)
                 break;
@@ -289,8 +289,8 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
                 lengthDistribution[distance] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
                 if (distance == 20)
                 {
-                    bedRecord.beginPos = getKey(*it).getPosition();
-                    bedRecord.endPos = getKey(*tempIt).getPosition();
+                    bedRecord.beginPos = getKey(*it).get5EndPosition();
+                    bedRecord.endPos = getKey(*tempIt).get5EndPosition();
                     bedRecord.name = std::to_string(getUniqueFrequency(*it) * getUniqueFrequency(*tempIt)); // abuse name as val parameter in BedGraph
                     saveBed.write(bedRecord);
                 }

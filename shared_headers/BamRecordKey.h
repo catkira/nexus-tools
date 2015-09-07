@@ -36,7 +36,7 @@ struct BamRecordKey
         init(std::forward<TRecord>(record));
     }
 
-    __int32 getPosition() const
+    __int32 get5EndPosition() const
     {
         return static_cast<__int32>(pos) >> 1;
     }
@@ -58,9 +58,17 @@ struct BamRecordKey
     {
         return lhs.pos <= rhs.pos;
     }
+    bool friend lessEqualWithoutStrand(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
+    {
+        return rhs.pos & 0xFFFFFFFFFFFFFFFE <= lhs.pos & 0xFFFFFFFFFFFFFFFE;
+    }
     bool friend operator==(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
     {
         return rhs.pos == lhs.pos;
+    }
+    bool friend isEqualWithoutStrand(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
+    {
+        return rhs.pos & 0xFFFFFFFFFFFFFFFE == lhs.pos & 0xFFFFFFFFFFFFFFFE;
     }
 private:
     template <typename THasBarcode>
@@ -98,14 +106,14 @@ private:
 
 // returns false if keys are from different chromosomes
 template <typename THasBarcode>
-bool calculateDistance(const BamRecordKey<THasBarcode>& key1, const BamRecordKey<THasBarcode>& key2, int& distance)
+bool calculate5EndDistance(const BamRecordKey<THasBarcode>& key1, const BamRecordKey<THasBarcode>& key2, int& distance)
 {
     if (key1.getRID() != key2.getRID())
     {
         //distance = 0;
         return false;
     }
-    distance = key2.getPosition() - key1.getPosition();
+    distance = key2.get5EndPosition() - key1.get5EndPosition();
     return true;
 }
 

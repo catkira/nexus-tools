@@ -119,14 +119,6 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
-template <typename TPosition>
-TPosition getPosition(const OccurenceMap::value_type& val)
-{
-    TPosition position;
-    position.chromosomeID = val.first.getRID();
-    position.position = val.first.getPosition();
-    return position;    // assume return value optimization
-}
 
 int main(int argc, char const * argv[])
 {
@@ -234,9 +226,9 @@ int main(int argc, char const * argv[])
     //calculateScoreDistribution2(occurenceMap, calcScoreWidth, maxDistance, bindingCharacteristicsMap);
     std::fstream fs;
 #ifdef _MSC_VER
-    fs.open(getFilePrefix(argv[1]) + "lengthDistribution.txt", std::fstream::out, _SH_DENYNO);
+    fs.open(getFilePrefix(argv[1]) + "_lengthDistribution.txt", std::fstream::out, _SH_DENYNO);
 #else
-    fs.open(getFilePrefix(argv[1]) + "lengthDistribution.txt", std::fstream::out);
+    fs.open(getFilePrefix(argv[1]) + "_lengthDistribution.txt", std::fstream::out);
 #endif
 
     std::vector<unsigned int> lengthDistribution;

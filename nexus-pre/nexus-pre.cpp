@@ -336,14 +336,14 @@ int main(int argc, char const * argv[])
             if (getKey(val).isReverseStrand())    // reverse strand
             {
                 // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
-                bedRecord.beginPos = getKey(val).getPosition();
+                bedRecord.beginPos = getKey(val).get5EndPosition();
                 bedRecord.endPos = bedRecord.beginPos + 1;
                 bedRecord.name = std::to_string(-static_cast<int32_t>(val.second.second)); // abuse name as val parameter in BedGraph
                 saveBedReverseStrand.write(bedRecord);
             }
             else    // forward strand
             {
-                bedRecord.beginPos = getKey(val).getPosition();
+                bedRecord.beginPos = getKey(val).get5EndPosition();
                 bedRecord.endPos = bedRecord.beginPos + 1;
                 bedRecord.name = std::to_string(val.second.second); // abuse name as val parameter in BedGraph
                 saveBedForwardStrand.write(bedRecord);

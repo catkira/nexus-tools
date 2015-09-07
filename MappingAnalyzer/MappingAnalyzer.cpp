@@ -12,7 +12,6 @@
 
 struct Statistics
 {
-    unsigned totalReads = 0;
     unsigned readsFile1 = 0;
     unsigned readsFile2 = 0;
     unsigned matchingReads = 0;
@@ -23,12 +22,12 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool tabbed
 {
     if (tabbed)
     {
-        stream << "Total reads" << "\t" << stats.totalReads << std::endl;
+        stream << "Reads File1" << "\t" << stats.readsFile1 << std::endl;
+        stream << "Reads File2" << "\t" << stats.readsFile2 << std::endl;
         stream << "Matching reads" << "\t" << stats.matchingReads << std::endl;
     }
     else
     {
-        stream << "Total reads     : " << stats.totalReads << std::endl;
         stream << "Reads File1     : " << stats.readsFile1 << std::endl;
         stream << "Reads File2     : " << stats.readsFile2 << std::endl;
         stream << "Matching reads  : " << stats.matchingReads << std::endl;
@@ -63,6 +62,31 @@ seqan::ArgumentParser buildParser(void)
 
     return parser;
 }
+
+template <typename TContext>
+struct SaveBam
+{
+    SaveBam(const seqan::BamHeader header, TContext& context, const std::string& filename)
+        : bamFileOut(static_cast<TContext>(context))
+    {
+        if (!open(bamFileOut, (filename + ".bam").c_str()))
+        {
+            std::cerr << "ERROR: Could not open " << filename << " for writing.\n";
+            return;
+        }
+        writeHeader(bamFileOut, header);
+    }
+    void write(const seqan::BamAlignmentRecord& record)
+    {
+        writeRecord(bamFileOut, record);
+    }
+    void close()
+    {
+        seqan::close(bamFileOut);
+    }
+    seqan::BamFileOut bamFileOut;
+};
+
 
 std::string getFilePath(const std::string& fileName)
 {
@@ -154,7 +178,10 @@ int main(int argc, char const * argv[])
 
     BamRecordKey<NoBarcode> key1(record1);
     BamRecordKey<NoBarcode> key2(record2);
-    std::vector<std::string> tempIdStorage;
+    //std::vector<std::pair<unsigned int, std::string>> tempIdStorage;
+    std::map<std::string, unsigned int> tempIdStorage;
+
+    SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn1, outPrefix + "_consensus_mapped");
 
     std::cout << std::endl;
 
@@ -162,32 +189,30 @@ int main(int argc, char const * argv[])
     while (!atEnd(bamFileIn1) && !atEnd(bamFileIn2))
     {
         readRecord(record1, bamFileIn1);
-        ++stats.totalReads;
         ++stats.readsFile1;
 
-        if (stats.totalReads % 10000 == 0)
-            std::cout << stats.totalReads << " reads processed" << "\r";
+        if ((stats.readsFile1 + stats.readsFile1) % 100000 == 0)
+            std::cout << stats.readsFile1 + stats.readsFile1 << " reads processed" << "\r";
 
         key1.init(record1);     
-        tempIdStorage.clear();
-        while (!atEnd(bamFileIn2) && key2.init(record2) <= key1)
+
+        if (key1.get5EndPosition() == 2456246)
+            int a = 0;
+        while (!atEnd(bamFileIn2) && lessEqualWithoutStrand(key2.init(record2), key1))
         {
-            if(key2 == key1)
-                tempIdStorage.emplace_back(getReadId(seqan::toCString(record2.qName)));
+            tempIdStorage.emplace(std::make_pair(getReadId(seqan::toCString(record2.qName)), key2.get5EndPosition()));
             readRecord(record2, bamFileIn2);
             ++stats.readsFile2;
         }
         const auto record1ReadId = getReadId(seqan::toCString(record1.qName));
-        for (const auto readId : tempIdStorage)
+        const auto it = tempIdStorage.find(record1ReadId);
+        if (it != tempIdStorage.end() && it->second == key1.get5EndPosition())
         {
-            if (record1ReadId == readId)
-            {
-                //
-                ++stats.matchingReads;
-                break;
-            }
+            saveBam.write(record1);
+            ++stats.matchingReads;
         }
     }
+    saveBam.close();
 
     auto t2 = std::chrono::steady_clock::now();
     std::cout << std::endl;
@@ -196,9 +221,9 @@ int main(int argc, char const * argv[])
 
     std::fstream fs;
 #ifdef _MSC_VER
-    fs.open(getFilePrefix(argv[1]) + "MappingAnalyzer_Statistics.txt", std::fstream::out, _SH_DENYNO);
+    fs.open(getFilePrefix(argv[1]) + "_MappingAnalyzer_Statistics.txt", std::fstream::out, _SH_DENYNO);
 #else
-    fs.open(getFilePrefix(argv[1]) + "MappingAnalyzer_Statistics.txt", std::fstream::out);
+    fs.open(getFilePrefix(argv[1]) + "_MappingAnalyzer_Statistics.txt", std::fstream::out);
 #endif
 
     fs.close();
