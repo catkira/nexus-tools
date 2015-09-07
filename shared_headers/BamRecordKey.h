@@ -54,7 +54,10 @@ struct BamRecordKey
     {
         return lhs.pos < rhs.pos;
     }
-
+    bool friend operator<=(const BamRecordKey<NoBarcode>& lhs, const BamRecordKey<NoBarcode>& rhs)
+    {
+        return lhs.pos <= rhs.pos;
+    }
     bool friend operator==(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
     {
         return rhs.pos == lhs.pos;

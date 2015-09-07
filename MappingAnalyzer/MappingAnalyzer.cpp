@@ -13,7 +13,9 @@
 struct Statistics
 {
     unsigned totalReads = 0;
-    unsigned samePositionReads = 0;
+    unsigned readsFile1 = 0;
+    unsigned readsFile2 = 0;
+    unsigned matchingReads = 0;
 };
 
 template <typename TStream>
@@ -22,12 +24,14 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool tabbed
     if (tabbed)
     {
         stream << "Total reads" << "\t" << stats.totalReads << std::endl;
-        stream << "Same position reads" << "\t" << stats.samePositionReads << std::endl;
+        stream << "Matching reads" << "\t" << stats.matchingReads << std::endl;
     }
     else
     {
-        stream << "Total reads                          : " << stats.totalReads << std::endl;
-        stream << "Same position reads                  : " << stats.samePositionReads << std::endl;
+        stream << "Total reads     : " << stats.totalReads << std::endl;
+        stream << "Reads File1     : " << stats.readsFile1 << std::endl;
+        stream << "Reads File2     : " << stats.readsFile2 << std::endl;
+        stream << "Matching reads  : " << stats.matchingReads << std::endl;
     }
 }
 
@@ -89,6 +93,14 @@ std::string getFilename(const std::string& fileName)
     return fileName.substr(found + 1);
 }
 
+std::string getReadId(const std::string id)
+{
+    auto pos1 = id.find('.');
+    auto pos2 = id.find(':');
+    if(pos1 == std::string::npos || pos2 == std::string::npos || pos1 >= pos2)
+        return std::string("");
+    return id.substr(pos1+1, pos2 - pos1 - 1);
+}
 
 
 int main(int argc, char const * argv[])
@@ -142,29 +154,45 @@ int main(int argc, char const * argv[])
 
     BamRecordKey<NoBarcode> key1(record1);
     BamRecordKey<NoBarcode> key2(record2);
+    std::vector<std::string> tempIdStorage;
 
-    while (!atEnd(bamFileIn1))
+    std::cout << std::endl;
+
+    readRecord(record2, bamFileIn2);
+    while (!atEnd(bamFileIn1) && !atEnd(bamFileIn2))
     {
         readRecord(record1, bamFileIn1);
         ++stats.totalReads;
+        ++stats.readsFile1;
 
-        key1.init(record1);
-        while(!atEnd(bamFileIn1) && key2.init(record2) < key1)
+        if (stats.totalReads % 10000 == 0)
+            std::cout << stats.totalReads << " reads processed" << "\r";
+
+        key1.init(record1);     
+        tempIdStorage.clear();
+        while (!atEnd(bamFileIn2) && key2.init(record2) <= key1)
+        {
+            if(key2 == key1)
+                tempIdStorage.emplace_back(getReadId(seqan::toCString(record2.qName)));
             readRecord(record2, bamFileIn2);
-        if (key1 == key2)
-        {
-            // check if readId1 == readId2
-            // if same, write read into sameMapped
+            ++stats.readsFile2;
         }
-        else
+        const auto record1ReadId = getReadId(seqan::toCString(record1.qName));
+        for (const auto readId : tempIdStorage)
         {
-            // write read into notMappedIn
+            if (record1ReadId == readId)
+            {
+                //
+                ++stats.matchingReads;
+                break;
+            }
         }
-        readsSeen1.emplace_back(key1);
     }
 
     auto t2 = std::chrono::steady_clock::now();
-    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+    std::cout << std::endl;
+    std::cout << "elapsed time: " << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+    printStatistics(std::cout, stats);
 
     std::fstream fs;
 #ifdef _MSC_VER
