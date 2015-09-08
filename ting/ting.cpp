@@ -119,6 +119,8 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
+template <class T, size_t ROW, size_t COL>
+    using Matrix = std::array<std::array<T, COL>, ROW>;
 
 int main(int argc, char const * argv[])
 {
@@ -224,21 +226,12 @@ int main(int argc, char const * argv[])
     //auto calcScoreWidth = [&range, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange, auto _halfWindowWidth)
     //{return slidingWindowScore<OccurenceMap>(_it, range, _halfWindowWidth, 0, _tempSlidingWindowRange);};
     //calculateScoreDistribution2(occurenceMap, calcScoreWidth, maxDistance, bindingCharacteristicsMap);
-    std::fstream fs;
-#ifdef _MSC_VER
-    fs.open(getFilePrefix(argv[1]) + "_lengthDistribution.txt", std::fstream::out, _SH_DENYNO);
-#else
-    fs.open(getFilePrefix(argv[1]) + "_lengthDistribution.txt", std::fstream::out);
-#endif
 
-    std::vector<unsigned int> lengthDistribution;
-    lengthDistribution.resize(maxDistance);
-    calculateQFragLengthDistribution(occurenceMap, lengthDistribution, bamFileIn);
-    for (auto i = 1;i < maxDistance;++i)
-    {
-        std::cout << i << "\t" << lengthDistribution[i] << "\t" << std::endl;
-        fs << i << "\t" << lengthDistribution[i] << "\t" << std::endl;
-    }
-    fs.close();
+    const auto numChr = seqan::length(contigNames(context(bamFileIn)));
+    std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
+    unsigned int estimatedFragmentLength = 0;
+    calculateCrossCorrelation(occurenceMap, crossCorrelation, bamFileIn);
+    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn, estimatedFragmentLength);
+    std::cout << "estimated fragment length: " << estimatedFragmentLength << std::endl;
     return 0;
 }

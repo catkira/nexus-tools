@@ -26,6 +26,7 @@ parser.add_argument('--bowtie_location', nargs='?', default = "")
 parser.add_argument('--num_threads', nargs='?', default = "4")
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
+parser.add_argument('--filter_chromosomes', type=str, default="")
 parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
@@ -128,7 +129,7 @@ if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
 nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
 
 if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
-    args = ("nexus-pre", bowtieOutputFilename,  "-p", "-b")
+    args = ("nexus-pre", bowtieOutputFilename,  "-p", "-b", "-fc", results.filter_chromosomes)
     print "Filtering post-mapping barcodes..."
     popen = subprocess.Popen(args, stdout=subprocess.PIPE)
     popen.wait()

@@ -328,25 +328,29 @@ int main(int argc, char const * argv[])
     std::vector<Chromosome> chromosomes;
     int num;
     int numQFrags = 0;
-    ReadAlignmentFile(chromosomes, num, "P:\\data\\preprocessed\\SRR1175698\\SRR1175698_filtered_sorted.bam", "None", true, 1);
+    ReadAlignmentFile(chromosomes, num, "P:\\data\\preprocessed\\SRR1175698_fcU_fcM_tr15\\SRR1175698_fcU_fcM_tr15_filtered_sorted.bam", "None", true, 1);
     std::ofstream out;
     out.open("P:\\qfrags.txt");
     for (const auto chromosome : chromosomes)
         out << chromosome.name << "\t";
-
+    out << "all" << "\t";
+    out << std::endl;
     for (int n = 1;n < 100;n++)
     {
         numQFrags = 0;
+        unsigned int total = 0;
         //for(auto chromosome : chromosomes)
         std::cout << "numQFrags: " << n << ": ";
         for (int i = 0; i < chromosomes.size(); ++i)
         {
             numQFrags = 0;
             writeQFragsToBED(chromosomes[i], "P:\\qfrags", n, n, numQFrags);
+            total += numQFrags;
             std::cout << numQFrags << "\t";
             out << numQFrags << "\t";
         }
         std::cout << std::endl;
+        out << total << "\t";
         out << std::endl;
 
     }

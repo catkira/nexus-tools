@@ -18,11 +18,13 @@ struct Statistics
 {
     unsigned totalReads = 0;
     unsigned totalMappedReads = 0;
+    unsigned filteredReads = 0;
     unsigned removedReads = 0;
     unsigned totalSamePositionReads = 0;
     unsigned readsAfterFiltering = 0;
     unsigned int couldNotMap = 0;
     unsigned int couldNotMapUniquely = 0;
+    unsigned int estimatedFragmentLength = 0;
 };
 
 template <typename TStream>
@@ -31,22 +33,26 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool cluste
     if (tabbed)
     {
         stream << "Total reads" << "\t"<< stats.totalReads << std::endl;
+        stream << "Filtered reads (-fc Option)" << "\t" << stats.filteredReads << std::endl;
         stream << "Mapped reads" << "\t" << stats.totalMappedReads << std::endl;
         stream << "Non mappable reads" << "\t" << stats.couldNotMap << std::endl;
         stream << "Non uniquely mappable reads" << "\t" << stats.couldNotMapUniquely << std::endl;
         stream << "After barcode filtering" << "\t" << stats.totalMappedReads - stats.removedReads << "\t" << " (-" << stats.removedReads << ")" << std::endl;
         stream << "Total duplet reads" << "\t" << stats.totalSamePositionReads << std::endl;
+        stream << "Estimated fragment Length" << "\t" << stats.estimatedFragmentLength << std::endl;
         if (clusterFiltering)
             stream << "After cluster filtering" << "\t" << stats.readsAfterFiltering << "\t" << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
     }
     else
     {
         stream << "Total reads                          : " << stats.totalReads << std::endl;
+        stream << "Filtered reads (-fc Option)          : " << stats.filteredReads << std::endl;
         stream << "Mapped reads                         : " << stats.totalMappedReads << std::endl;
         stream << "Non mappable reads                   : " << stats.couldNotMap << std::endl;
         stream << "Non uniquely mappable reads          : " << stats.couldNotMapUniquely << std::endl;
         stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
         stream << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
+        stream << "Estimated fragment length            : " << stats.estimatedFragmentLength << std::endl;
         if (clusterFiltering)
             stream << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
     }
@@ -93,6 +99,12 @@ seqan::ArgumentParser buildParser(void)
     seqan::ArgParseOption performPeakCalling = seqan::ArgParseOption(
         "p", "Peak", "Perform peak calling");
     addOption(parser, performPeakCalling);
+
+    seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
+        "fc", "filterChromosomes", "Comma-seperated list of Chromosomes to filter out",
+        seqan::ArgParseOption::STRING, "LIST");
+    setDefaultValue(filterChromosomesOpt, "");
+    addOption(parser, filterChromosomesOpt);
 
     seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
         "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
@@ -224,6 +236,9 @@ int main(int argc, char const * argv[])
     const bool filter = seqan::isSet(parser, "f");
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
     const bool peakCallingEnabled = seqan::isSet(parser, "p");
+    seqan::CharString _filterChromosomes;
+    seqan::getOptionValue(_filterChromosomes, parser, "fc");
+    std::string filterChromosomes = seqan::toCString(_filterChromosomes);
 
     std::set<BamRecordKey<WithBarcode>> keySet;
     OccurenceMap occurenceMap;
@@ -236,15 +251,38 @@ int main(int argc, char const * argv[])
 
     seqan::BamHeader header;
     readHeader(header, bamFileIn);
+
+    std::set<unsigned int> chromosomeFilter;
+    std::stringstream filterChromosomes_stringstream(filterChromosomes);
+    std::string token;
+    while (getline(filterChromosomes_stringstream,token,','))
+    {
+        bool found = false;
+        for (auto i = 0;i < length(contigNames(context(bamFileIn))); ++i)
+            if (contigNames(context(bamFileIn))[i] == token)
+            {
+                found = true;
+                chromosomeFilter.insert(i);
+                //std::cout << "Chromosome: " << token << "id: " << i << std::endl;
+                break;
+            }
+        if (!found)
+            std::cout << "Warning: ID for chromosome " << token << " not found, this chromosome won't be filtered." << std::endl;
+    } 
+
     
     SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
-
     unsigned tagID = 0;
 
     while (!atEnd(bamFileIn))
     {
         readRecord(record, bamFileIn);
         ++stats.totalReads;
+        if (chromosomeFilter.find(record.rID) != chromosomeFilter.end())
+        {
+            ++stats.filteredReads;
+            continue;
+        }
         const seqan::BamTagsDict tags(record.tags);
         if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
         {
@@ -384,6 +422,13 @@ int main(int argc, char const * argv[])
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     duplicationRateUnique.clear();
     duplicationRate.clear();
+
+    const auto numChr = seqan::length(contigNames(context(bamFileIn)));
+    const unsigned int maxDistance = 100;
+    std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
+    calculateCrossCorrelation(occurenceMap, crossCorrelation, bamFileIn);
+    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn, stats.estimatedFragmentLength);
+    std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;
 
     printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
 #ifdef _MSV_VER

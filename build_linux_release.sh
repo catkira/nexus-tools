@@ -7,3 +7,4 @@ make
 cp -f bin/ting ../nexus-tools2/bin/
 cp -f bin/seqan_flexbar ../nexus-tools2/bin/
 cp -f bin/nexus-pre ../nexus-tools2/bin/
+cp -f bin/MappingAnalyzer ../nexus-tools2/bin/

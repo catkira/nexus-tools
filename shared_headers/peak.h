@@ -128,13 +128,13 @@ void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& 
     {
         //if (getStrand(it->first) != strand)
         //    continue;
-        if (getKey(*range.first).get5EndPosition() > 2456589 && getKey(*range.first).get5EndPosition() < 2456650)
-        {
-            std::cout << "startPos: " << getKey(*range.first).get5EndPosition()
-                << " endPos: " << getKey(*range.second).get5EndPosition()
-                << " itPos: " << getKey(*it).get5EndPosition()
-                << " score: " << calcScore(it, tempSlidingWindowRange) << std::endl;
-        }
+        //if (getKey(*range.first).get5EndPosition() > 2456589 && getKey(*range.first).get5EndPosition() < 2456650)
+        //{
+        //    std::cout << "startPos: " << getKey(*range.first).get5EndPosition()
+        //        << " endPos: " << getKey(*range.second).get5EndPosition()
+        //        << " itPos: " << getKey(*it).get5EndPosition()
+        //        << " score: " << calcScore(it, tempSlidingWindowRange) << std::endl;
+        //}
 
         if (!startDetected && calcScore(it, tempSlidingWindowRange) > (peakCandidate.score * 0.9))
         {
@@ -160,10 +160,10 @@ void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& 
             minPair.second = it;
     }
 
-    if (startPos > 2456589 && startPos < 2456650)
-    {
-        std::cout << "startPos: " << startPos << " endPos: " << endPos << std::endl;
-    }
+    //if (startPos > 2456589 && startPos < 2456650)
+    //{
+    //    std::cout << "startPos: " << startPos << " endPos: " << endPos << std::endl;
+    //}
     peakCandidate.width = endPos - startPos;
     peakCandidate.centerIt = minPair.second;
 }
@@ -210,13 +210,13 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range, TCalcScore c
             //        << " new center: " << getPosition(getKey(*peakCandidate.centerIt))
             //        << " width: " << peakCandidate.width << std::endl;
             //}
-            if (getKey(*prevPeakCandidate.centerIt).get5EndPosition() > 2456589 && getKey(*prevPeakCandidate.centerIt).get5EndPosition() < 2456650)
-            {
-                std::cout << "\npeak score: " << peakCandidate.score << std::endl;
-                std::cout << "pos before plateau adjustment: " << getKey(*prevPeakCandidate.centerIt).get5EndPosition() << std::endl;
-                std::cout << "pos after plateau adjustment: " << getKey(*peakCandidate.centerIt).get5EndPosition() << std::endl;
-                std::cout << " width: " << peakCandidate.width << std::endl;
-            }
+            //if (getKey(*prevPeakCandidate.centerIt).get5EndPosition() > 2456589 && getKey(*prevPeakCandidate.centerIt).get5EndPosition() < 2456650)
+            //{
+            //    std::cout << "\npeak score: " << peakCandidate.score << std::endl;
+            //    std::cout << "pos before plateau adjustment: " << getKey(*prevPeakCandidate.centerIt).get5EndPosition() << std::endl;
+            //    std::cout << "pos after plateau adjustment: " << getKey(*peakCandidate.centerIt).get5EndPosition() << std::endl;
+            //    std::cout << " width: " << peakCandidate.width << std::endl;
+            //}
             candidatePositions.push_back(peakCandidate);
             it = peakCandidate.range.second;
             tempScore = 0;
@@ -265,13 +265,46 @@ void calculateScoreDistribution(const TPeakCandidatesVector& peakCandidatesVecto
         }
 }
 
+template <typename TCrossCorrelation>
+void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn, unsigned int& estimatedFragmentLength)
+{
+    std::fstream fs;
+#ifdef _MSC_VER
+    fs.open(filename, std::fstream::out, _SH_DENYNO);
+#else
+    fs.open(filename, std::fstream::out);
+#endif
+
+    const auto numChr = seqan::length(contigNames(context(bamFileIn)));
+    for (auto chrName : contigNames(context(bamFileIn)))
+        fs << chrName << "\t";
+    fs << "totalSum" << std::endl;
+    unsigned int maxSum = 0;
+    for (auto i = 1;i < crossCorrelation.size();++i)
+    {
+        unsigned int sum = 0;
+        for (const auto num : crossCorrelation[i])
+        {
+            fs << num << "\t";
+            sum += num;
+        }
+        fs << sum << std::endl;
+        if (sum > maxSum)
+        {
+            maxSum = sum;
+            estimatedFragmentLength = i;
+        }
+    }
+    fs.close();
+}
+
 template <typename TEdgeDistribution, typename TLengthDistribution>
-void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
+void calculateCrossCorrelation(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
 {
     const auto maxDistance = lengthDistribution.size();
     seqan::BedRecord<seqan::Bed4> bedRecord;
                 // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
-    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBed("P:\\length20Frags");
+    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBed("P:\\length27Frags");
     for (auto it = edgeDistribution.begin(); it != edgeDistribution.end(); ++it)
     {
         auto tempIt = std::next(it, 1);
@@ -282,12 +315,12 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
         bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
         while (calculate5EndDistance(getKey(*it), getKey(*tempIt), distance))
         {
-            if (distance > maxDistance)
+            if (distance >= maxDistance)
                 break;
             if (getKey(*tempIt).isReverseStrand())
             {
-                lengthDistribution[distance] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
-                if (distance == 20)
+                lengthDistribution[distance][getKey(*it).getRID()] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
+                if (distance == 27)
                 {
                     bedRecord.beginPos = getKey(*it).get5EndPosition();
                     bedRecord.endPos = getKey(*tempIt).get5EndPosition();
