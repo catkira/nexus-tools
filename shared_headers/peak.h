@@ -266,7 +266,24 @@ void calculateScoreDistribution(const TPeakCandidatesVector& peakCandidatesVecto
 }
 
 template <typename TCrossCorrelation>
-void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn, unsigned int& estimatedFragmentLength)
+void estimateFragmentLength(const TCrossCorrelation crossCorrelation, unsigned int& estimatedFragmentLength)
+{
+    unsigned int maxSum = 0;
+    for (auto i = 1;i < crossCorrelation.size();++i)
+    {
+        unsigned int sum = 0;
+        for (const auto num : crossCorrelation[i])
+            sum += num;
+        if (sum > maxSum)
+        {
+            maxSum = sum;
+            estimatedFragmentLength = i;
+        }
+    }
+}
+
+template <typename TCrossCorrelation>
+void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn)
 {
     std::fstream fs;
 #ifdef _MSC_VER
@@ -279,21 +296,15 @@ void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCo
     for (auto chrName : contigNames(context(bamFileIn)))
         fs << chrName << "\t";
     fs << "totalSum" << std::endl;
-    unsigned int maxSum = 0;
-    for (auto i = 1;i < crossCorrelation.size();++i)
+    for (const auto element : crossCorrelation)
     {
         unsigned int sum = 0;
-        for (const auto num : crossCorrelation[i])
+        for (const auto num : element)
         {
             fs << num << "\t";
             sum += num;
         }
         fs << sum << std::endl;
-        if (sum > maxSum)
-        {
-            maxSum = sum;
-            estimatedFragmentLength = i;
-        }
     }
     fs.close();
 }

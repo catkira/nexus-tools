@@ -176,7 +176,6 @@ struct SaveBam
     seqan::BamFileOut bamFileOut;
 };
 
-
 typedef std::map<BamRecordKey<NoBarcode>, std::pair<unsigned int, unsigned int>> OccurenceMap;
 
 BamRecordKey<NoBarcode> getKey(const OccurenceMap::value_type& val)
@@ -187,15 +186,6 @@ BamRecordKey<NoBarcode> getKey(const OccurenceMap::value_type& val)
 unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
 {
     return val.second.second;
-}
-
-template <typename TPosition>
-TPosition getPosition(const OccurenceMap::value_type& val)
-{
-    TPosition position;
-    position.chromosomeID = static_cast<__int32>(val.first.pos >> 32);
-    position.position = static_cast<__int32>(val.first.pos) >> 1;
-    return position;    // assume return value optimization
 }
 
 int main(int argc, char const * argv[])
@@ -427,7 +417,8 @@ int main(int argc, char const * argv[])
     const unsigned int maxDistance = 100;
     std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
     calculateCrossCorrelation(occurenceMap, crossCorrelation, bamFileIn);
-    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn, stats.estimatedFragmentLength);
+    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn);
+    estimateFragmentLength(crossCorrelation, stats.estimatedFragmentLength);
     std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;
 
     printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
@@ -437,35 +428,5 @@ int main(int argc, char const * argv[])
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
 #endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
-
-    //if (peakCallingEnabled)
-    //{
-    //    t1 = std::chrono::steady_clock::now();
-
-    //    double scoreLimit = 0.2;
-    //    unsigned int halfWindowWidth = 30;
-    //    double ratioTolerance = 0.2; // allow 20% tolerance in score between first und second halfWindow
-    //    getOptionValue(scoreLimit, parser, "s");
-    //    getOptionValue(halfWindowWidth, parser, "w");
-    //    getOptionValue(ratioTolerance, parser, "t");
-
-    //    std::cout << std::endl << std::endl;
-    //    std::cout << "Settings for peak calling" << std::endl;
-    //    std::cout << "half window size: " << halfWindowWidth << std::endl;
-    //    std::cout << "score limit: " << scoreLimit << std::endl;
-    //    std::cout << "ratio tolerance: " << ratioTolerance << std::endl;
-
-    //    std::cout << "calculating peak candidates...";
-    //    std::vector<PeakCandidate<OccurenceMap>> positionsVector;
-
-    //    collectForwardCandidates<OccurenceMap>(Range<OccurenceMap>(occurenceMap.begin(), occurenceMap.end()), scoreLimit, halfWindowWidth, ratioTolerance, positionsVector);
-    //    t2 = std::chrono::steady_clock::now();
-    //    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
-    //    std::cout << "found " << positionsVector.size() << " candidates" << std::endl;
-
-    //    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename + "_candidateScores");
-    //    saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
-    //    forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(positionsVector, saveBedCandidateScores, bamFileIn.context);
-    //}
 	return 0;
 }

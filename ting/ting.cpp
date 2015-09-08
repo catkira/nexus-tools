@@ -229,9 +229,11 @@ int main(int argc, char const * argv[])
 
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
     std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    unsigned int estimatedFragmentLength = 0;
     calculateCrossCorrelation(occurenceMap, crossCorrelation, bamFileIn);
-    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn, estimatedFragmentLength);
+    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn);
+
+    unsigned int estimatedFragmentLength = 0;
+    estimateFragmentLength(crossCorrelation, estimatedFragmentLength);
     std::cout << "estimated fragment length: " << estimatedFragmentLength << std::endl;
     return 0;
 }
