@@ -116,7 +116,6 @@ template <typename TRange, typename TLambda, typename TPeakCandidate>
 void plateauAdjustment(const TRange& range, TLambda& calcScore, TPeakCandidate& peakCandidate)
 {
     // assert range.first.chromosome == range.second.chromosome
-    unsigned int plateauCount = 0;
     TRange tempSlidingWindowRange;
     TRange plateauRange;
     //const auto strand = getStrand(peakCandidate.centerIt->first);
@@ -202,7 +201,7 @@ void collectForwardCandidates(const Range<TEdgeDistribution> range, TCalcScore c
         }
         if (peakCandidate.score > 0)    // checking finished
         {
-            PeakCandidate<TEdgeDistribution> prevPeakCandidate = peakCandidate;
+            //PeakCandidate<TEdgeDistribution> prevPeakCandidate = peakCandidate;
             plateauAdjustment(Range<TEdgeDistribution>(peakCandidate.range.first, peakCandidate.range.second), calcScore, peakCandidate);
             //if (peakCandidate.centerIt != prevPeakCandidate.centerIt)
             //{
@@ -275,12 +274,11 @@ void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCo
     fs.open(filename, std::fstream::out);
 #endif
 
-    const auto numChr = seqan::length(contigNames(context(bamFileIn)));
     for (auto chrName : contigNames(context(bamFileIn)))
         fs << chrName << "\t";
     fs << "totalSum" << std::endl;
     unsigned int maxSum = 0;
-    for (auto i = 1;i < crossCorrelation.size();++i)
+    for (unsigned int i = 1;i < crossCorrelation.size();++i)
     {
         unsigned int sum = 0;
         for (const auto num : crossCorrelation[i])
@@ -304,7 +302,7 @@ void calculateCrossCorrelation(const TEdgeDistribution& edgeDistribution, TLengt
     const auto maxDistance = lengthDistribution.size();
     seqan::BedRecord<seqan::Bed4> bedRecord;
                 // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
-    SaveBed<seqan::BedRecord<seqan::Bed4>> saveBed("P:\\length27Frags");
+    //SaveBed<seqan::BedRecord<seqan::Bed4>> saveBed("P:\\length27Frags");
     for (auto it = edgeDistribution.begin(); it != edgeDistribution.end(); ++it)
     {
         auto tempIt = std::next(it, 1);
@@ -315,18 +313,18 @@ void calculateCrossCorrelation(const TEdgeDistribution& edgeDistribution, TLengt
         bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
         while (calculate5EndDistance(getKey(*it), getKey(*tempIt), distance))
         {
-            if (distance >= maxDistance)
+            if (distance >= static_cast<int>(maxDistance))
                 break;
             if (getKey(*tempIt).isReverseStrand())
             {
                 lengthDistribution[distance][getKey(*it).getRID()] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
-                if (distance == 27)
-                {
-                    bedRecord.beginPos = getKey(*it).get5EndPosition();
-                    bedRecord.endPos = getKey(*tempIt).get5EndPosition();
-                    bedRecord.name = std::to_string(getUniqueFrequency(*it) * getUniqueFrequency(*tempIt)); // abuse name as val parameter in BedGraph
-                    saveBed.write(bedRecord);
-                }
+                //if (distance == 27)
+                //{
+                //    bedRecord.beginPos = getKey(*it).get5EndPosition();
+                //    bedRecord.endPos = getKey(*tempIt).get5EndPosition();
+                //    bedRecord.name = std::to_string(getUniqueFrequency(*it) * getUniqueFrequency(*tempIt)); // abuse name as val parameter in BedGraph
+                //    saveBed.write(bedRecord);
+                //}
 
                 //lengthDistribution[distance] ++;
             }

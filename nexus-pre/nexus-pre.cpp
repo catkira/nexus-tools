@@ -235,7 +235,6 @@ int main(int argc, char const * argv[])
 
     const bool filter = seqan::isSet(parser, "f");
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
-    const bool peakCallingEnabled = seqan::isSet(parser, "p");
     seqan::CharString _filterChromosomes;
     seqan::getOptionValue(_filterChromosomes, parser, "fc");
     std::string filterChromosomes = seqan::toCString(_filterChromosomes);
@@ -258,7 +257,7 @@ int main(int argc, char const * argv[])
     while (getline(filterChromosomes_stringstream,token,','))
     {
         bool found = false;
-        for (auto i = 0;i < length(contigNames(context(bamFileIn))); ++i)
+        for (unsigned int i = 0;i < length(contigNames(context(bamFileIn))); ++i)
             if (contigNames(context(bamFileIn))[i] == token)
             {
                 found = true;
