@@ -206,6 +206,7 @@ int main(int argc, char const * argv[])
     auto windowRange = range;
     auto calcScore = [&range, ratioTolerance, halfWindowWidth](const auto _it, auto& _tempSlidingWindowRange)
         {return slidingWindowScore<OccurenceMap>(_it, range, halfWindowWidth, ratioTolerance, _tempSlidingWindowRange);};
+    (void)windowRange; // suppress warning
 
     collectForwardCandidates<OccurenceMap>(range, calcScore, scoreLimit, halfWindowWidth, peakCandidatesVector);
     t2 = std::chrono::steady_clock::now();

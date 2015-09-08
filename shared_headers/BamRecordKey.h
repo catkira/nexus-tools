@@ -71,8 +71,6 @@ struct BamRecordKey
         return rhs.pos & 0xFFFFFFFFFFFFFFFE == lhs.pos & 0xFFFFFFFFFFFFFFFE;
     }
 private:
-    template <typename THasBarcode>
-    friend struct CompareBamRecordKey;
     uint64_t pos;
 };
 
