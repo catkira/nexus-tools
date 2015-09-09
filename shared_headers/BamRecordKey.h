@@ -60,7 +60,7 @@ struct BamRecordKey
     }
     bool friend lessEqualWithoutStrand(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
     {
-        return rhs.pos & 0xFFFFFFFFFFFFFFFE <= lhs.pos & 0xFFFFFFFFFFFFFFFE;
+        return (rhs.pos & 0xFFFFFFFFFFFFFFFE) <= (lhs.pos & 0xFFFFFFFFFFFFFFFE);
     }
     bool friend operator==(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
     {
@@ -68,7 +68,7 @@ struct BamRecordKey
     }
     bool friend isEqualWithoutStrand(const BamRecordKey<THasBarcode>& rhs, const BamRecordKey<THasBarcode>& lhs)
     {
-        return rhs.pos & 0xFFFFFFFFFFFFFFFE == lhs.pos & 0xFFFFFFFFFFFFFFFE;
+        return (rhs.pos & 0xFFFFFFFFFFFFFFFE) == (lhs.pos & 0xFFFFFFFFFFFFFFFE);
     }
 private:
     uint64_t pos;

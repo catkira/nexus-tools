@@ -268,7 +268,7 @@ template <typename TCrossCorrelation>
 void estimateFragmentLength(const TCrossCorrelation crossCorrelation, unsigned int& estimatedFragmentLength)
 {
     unsigned int maxSum = 0;
-    for (auto i = 1;i < crossCorrelation.size();++i)
+    for (unsigned int i = 1;i < crossCorrelation.size();++i)
     {
         unsigned int sum = 0;
         for (const auto num : crossCorrelation[i])
