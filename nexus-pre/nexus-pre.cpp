@@ -4,10 +4,6 @@
 #include <seqan/arg_parse.h>
 #include <seqan/basic.h>
 #include <string>
-#include <unordered_set>
-#include <unordered_map>
-#include <boost/container/flat_map.hpp>
-#include <boost/container/flat_set.hpp>
 #include <algorithm>
 #include <chrono>
 
@@ -413,10 +409,10 @@ int main(int argc, char const * argv[])
     duplicationRate.clear();
 
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
-    const unsigned int maxDistance = 100;
+    const unsigned int maxDistance = 1000;
     std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    calculateCrossCorrelation(occurenceMap, crossCorrelation, bamFileIn);
-    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn);
+    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, bamFileIn);
+    saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", crossCorrelation, bamFileIn);
     estimateFragmentLength(crossCorrelation, stats.estimatedFragmentLength);
     std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;
 

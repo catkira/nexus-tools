@@ -222,19 +222,23 @@ int main(int argc, char const * argv[])
     std::map<unsigned int, unsigned int> bindingLengthDistribution;
     //calculateBindingLengthDistribution(peakCandidatesVector, filter, bindingLengthDistribution);
     std::map<unsigned int, double> bindingCharacteristicsMap;
-    const int maxDistance = 100;
+    const int maxDistance = 1000;
     //calculateScoreDistribution(peakCandidatesVector, calcScore, maxDistance, bindingCharacteristicsMap);
     //auto calcScoreWidth = [&range, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange, auto _halfWindowWidth)
     //{return slidingWindowScore<OccurenceMap>(_it, range, _halfWindowWidth, 0, _tempSlidingWindowRange);};
     //calculateScoreDistribution2(occurenceMap, calcScoreWidth, maxDistance, bindingCharacteristicsMap);
 
+    std::cout << "calculating QFrag-Length-Distribution...";
+    t1 = std::chrono::steady_clock::now();
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
-    std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    calculateCrossCorrelation(occurenceMap, crossCorrelation, bamFileIn);
-    saveCrossCorrelation(getFilePrefix(argv[1]) + "_crossCorrelation.txt", crossCorrelation, bamFileIn);
+    std::vector<std::vector<unsigned int>> qFragLengthDistribution(maxDistance, std::vector<unsigned int>(numChr));
+    calculateQFragLengthDistribution(occurenceMap, qFragLengthDistribution, bamFileIn);
+    saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", qFragLengthDistribution, bamFileIn);
+    t2 = std::chrono::steady_clock::now();
+    std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
 
     unsigned int estimatedFragmentLength = 0;
-    estimateFragmentLength(crossCorrelation, estimatedFragmentLength);
+    estimateFragmentLength(qFragLengthDistribution, estimatedFragmentLength);
     std::cout << "estimated fragment length: " << estimatedFragmentLength << std::endl;
     return 0;
 }

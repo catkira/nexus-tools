@@ -282,7 +282,7 @@ void estimateFragmentLength(const TCrossCorrelation crossCorrelation, unsigned i
 }
 
 template <typename TCrossCorrelation>
-void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn)
+void saveQFragLengthDistribution(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn)
 {
     std::fstream fs;
 #ifdef _MSC_VER
@@ -308,7 +308,7 @@ void saveCrossCorrelation(const std::string& filename, TCrossCorrelation crossCo
 }
 
 template <typename TEdgeDistribution, typename TLengthDistribution>
-void calculateCrossCorrelation(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
+void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
 {
     const auto maxDistance = lengthDistribution.size();
     seqan::BedRecord<seqan::Bed4> bedRecord;
