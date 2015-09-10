@@ -349,7 +349,7 @@ int main(int argc, char const * argv[])
             }
         }
         const auto uniqueHits = val.second.second;
-        const auto nonUniqueHits = uniqueHits - val.second.second;
+        const auto nonUniqueHits = val.second.first - uniqueHits;
         if (duplicationRateUnique.size() < (uniqueHits - 1) + 1)
             duplicationRateUnique.resize((uniqueHits-1)+1);
         ++duplicationRateUnique[uniqueHits - 1];
