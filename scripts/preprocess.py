@@ -11,8 +11,8 @@ import platform
 
 flexbar_er = "0.2";
 flexbar_ol = "4";
-flexbar_fm = "22";
-flexbar_ml = "18";
+flexbar_fm = "1";
+flexbar_ml = "1";
 flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
 flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
@@ -129,7 +129,7 @@ if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
 nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
 
 if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
-    args = ("nexus-pre", bowtieOutputFilename,  "-p", "-b", "-fc", results.filter_chromosomes)
+    args = ("nexus-pre", bowtieOutputFilename,  "-fc", results.filter_chromosomes)
     print "Filtering post-mapping barcodes..."
     popen = subprocess.Popen(args, stdout=subprocess.PIPE)
     popen.wait()
