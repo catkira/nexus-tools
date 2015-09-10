@@ -93,8 +93,7 @@ struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
     {
         if (operator<(static_cast<const BamRecordKey<NoBarcode>&>(lhs), static_cast<const BamRecordKey<NoBarcode>&>(rhs)))
             return true;
-        if (lhs.barcode.empty() == false && rhs.barcode.empty() == false
-            && lhs.barcode != rhs.barcode)
+        if ((operator==(static_cast<const BamRecordKey<NoBarcode>&>(lhs), static_cast<const BamRecordKey<NoBarcode>&>(rhs))))
             return lhs.barcode < rhs.barcode;
         return false;
     }
