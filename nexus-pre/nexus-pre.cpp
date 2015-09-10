@@ -102,28 +102,6 @@ seqan::ArgumentParser buildParser(void)
     setDefaultValue(filterChromosomesOpt, "");
     addOption(parser, filterChromosomesOpt);
 
-    seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
-        "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
-        seqan::ArgParseOption::DOUBLE, "VALUE");
-    setDefaultValue(ratioOpt, 2.0);
-    setMinValue(ratioOpt, "0.01");
-    setMaxValue(ratioOpt, "100");
-    addOption(parser, ratioOpt);
-
-    seqan::ArgParseOption halfWindowSizeOpt = seqan::ArgParseOption(
-        "w", "size", "Half window size",
-        seqan::ArgParseOption::INTEGER, "VALUE");
-    setDefaultValue(halfWindowSizeOpt, 20);
-    setMinValue(halfWindowSizeOpt, "1");
-    addOption(parser, halfWindowSizeOpt);
-
-    seqan::ArgParseOption scoreLimitOpt = seqan::ArgParseOption(
-        "s", "score", "Score limit",
-        seqan::ArgParseOption::DOUBLE, "VALUE");
-    setDefaultValue(scoreLimitOpt, 10);
-    setMinValue(scoreLimitOpt, "0.0001");
-    addOption(parser, scoreLimitOpt);
-
     return parser;
 }
 
@@ -262,6 +240,8 @@ int main(int argc, char const * argv[])
     while (!atEnd(bamFileIn))
     {
         readRecord(record, bamFileIn);
+        if (atEnd(bamFileIn))
+            break;
         ++stats.totalReads;
         if (chromosomeFilter.find(record.rID) != chromosomeFilter.end())
         {
@@ -284,16 +264,16 @@ int main(int argc, char const * argv[])
         ++stats.totalMappedReads;
         const BamRecordKey<WithBarcode> key(record);
         const BamRecordKey<NoBarcode> pos(record);
-        const auto insertResult = keySet.insert(std::move(key));
+        const auto insertResult = keySet.insert(key);
         OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
         if (!insertResult.second)  // element was not inserted because it existed already
-            ++stats.removedReads;
+            ++stats.removedReads; // stats.removedReads = total non unique hits
         else
         {
             saveBam.write(record);
             ++mapItem.second; // unique hits
         }
-        // non unique hits
+        // total hits
         ++mapItem.first;
     }
     saveBam.close();
@@ -372,12 +352,14 @@ int main(int argc, char const * argv[])
                 saveBedForwardStrand.write(bedRecord);
             }
         }
-        if (duplicationRateUnique.size() < val.second.second)
-            duplicationRateUnique.resize(val.second.second);
-        ++duplicationRateUnique[val.second.second - 1];
-        if (duplicationRate.size() < val.second.first)
-            duplicationRate.resize(val.second.first);
-        ++duplicationRate[val.second.first - 1];
+        const auto uniqueHits = val.second.second;
+        const auto nonUniqueHits = uniqueHits - val.second.second;
+        if (duplicationRateUnique.size() < (uniqueHits - 1) + 1)
+            duplicationRateUnique.resize((uniqueHits-1)+1);
+        ++duplicationRateUnique[uniqueHits - 1];
+        if (duplicationRate.size() < nonUniqueHits + 1)
+            duplicationRate.resize(nonUniqueHits+1);
+        ++duplicationRate[nonUniqueHits];
     });
     saveBedForwardStrand.close();
     saveBedReverseStrand.close();
@@ -401,7 +383,7 @@ int main(int argc, char const * argv[])
             stats.totalSamePositionReads += (duplicationRate[i] * (i));
         //std::cout << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << std::endl;
         fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
-        fs2 << i + 1 << "\t" << duplicationRateUnique[i]*(i+1) << "\t" << duplicationRate[i]*(i+1) <<std::endl;
+        fs2 << i + 1 << "\t" << duplicationRateUnique[i]*(i+1) << "\t" << (duplicationRate[i])*(i+1) <<std::endl;
     }
     t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
