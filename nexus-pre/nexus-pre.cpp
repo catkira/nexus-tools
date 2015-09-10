@@ -92,10 +92,6 @@ seqan::ArgumentParser buildParser(void)
     setMinValue(recordOpt, "10");
     addOption(parser, recordOpt);
 
-    seqan::ArgParseOption performPeakCalling = seqan::ArgParseOption(
-        "p", "Peak", "Perform peak calling");
-    addOption(parser, performPeakCalling);
-
     seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
         "fc", "filterChromosomes", "Comma-seperated list of Chromosomes to filter out",
         seqan::ArgParseOption::STRING, "LIST");
