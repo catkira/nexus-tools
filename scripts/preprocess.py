@@ -11,8 +11,8 @@ import platform
 
 flexbar_er = "0.2";
 flexbar_ol = "4";
-flexbar_fm = "1";
-flexbar_ml = "1";
+flexbar_fm = "4";
+flexbar_ml = "4";
 flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
 flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
