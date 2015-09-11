@@ -6,6 +6,7 @@
 #include <string>
 #include <algorithm>
 #include <chrono>
+#include <cassert>
 
 #include "peak.h"
 #include "BamRecordKey.h"
@@ -158,6 +159,29 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
+template <typename TChromosomeNames>
+const auto calculateChromosomeFilter(const std::string& filterString, const TChromosomeNames& chromosomeNames)
+{
+    std::stringstream filterChromosomes_stringstream(filterString);
+    const auto numChromosomes = length(chromosomeNames);
+    std::string token;
+    std::set<unsigned int> chromosomeFilter;
+    while (getline(filterChromosomes_stringstream, token, ','))
+    {
+        bool found = false;
+        for (unsigned int i = 0;i < numChromosomes; ++i)
+            if (chromosomeNames[i] == token)
+            {
+                found = true;
+                chromosomeFilter.insert(i);
+                break;
+            }
+        if (!found)
+            std::cout << "Warning: ID for chromosome " << token << " not found, this chromosome won't be filtered." << std::endl;
+    }
+    return chromosomeFilter;
+}
+
 int main(int argc, char const * argv[])
 {
     // Additional checks
@@ -207,29 +231,9 @@ int main(int argc, char const * argv[])
     std::cout << "barcode filtering... ";
     auto t1 = std::chrono::steady_clock::now();
     seqan::BamAlignmentRecord record;
-
     seqan::BamHeader header;
     readHeader(header, bamFileIn);
-
-    std::set<unsigned int> chromosomeFilter;
-    std::stringstream filterChromosomes_stringstream(filterChromosomes);
-    std::string token;
-    while (getline(filterChromosomes_stringstream,token,','))
-    {
-        bool found = false;
-        for (unsigned int i = 0;i < length(contigNames(context(bamFileIn))); ++i)
-            if (contigNames(context(bamFileIn))[i] == token)
-            {
-                found = true;
-                chromosomeFilter.insert(i);
-                //std::cout << "Chromosome: " << token << "id: " << i << std::endl;
-                break;
-            }
-        if (!found)
-            std::cout << "Warning: ID for chromosome " << token << " not found, this chromosome won't be filtered." << std::endl;
-    } 
-
-    
+    const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
     SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
     unsigned tagID = 0;
 
@@ -285,10 +289,8 @@ int main(int argc, char const * argv[])
         std::cout << "filtering reads... ";
         unsigned clusterSize = 0;
         getOptionValue(clusterSize, parser, "f");
-        // Open output file, BamFileOut accepts also an ostream and a format tag.
-        //while (!atEnd(bamFileIn2))
         seqan::BamFileIn bamFileIn2(seqan::toCString(outFilename + ".bam"));
-        //clear(header);
+        clear(header); // this is a bug in seqan, header has to be cleared before call to readHeader
         readHeader(header, bamFileIn2);
         SaveBam<seqan::BamFileIn> saveBam2(header, bamFileIn2, outFilename2);
         while (!atEnd(bamFileIn2))
@@ -297,10 +299,8 @@ int main(int argc, char const * argv[])
             const auto occurenceMapIt =  occurenceMap.find(BamRecordKey<NoBarcode>(record));
             if (occurenceMapIt->second.second >= clusterSize)
             {
-                //sortedBamVector2.emplace_back(sortedBamVector[i]);
                 saveBam2.write(record);
                 ++stats.readsAfterFiltering;
-                //++keyMapIt;
             }
         }
         saveBam2.close();
@@ -349,13 +349,17 @@ int main(int argc, char const * argv[])
             }
         }
         const auto uniqueHits = val.second.second;
-        const auto nonUniqueHits = val.second.first - uniqueHits;
-        if (duplicationRateUnique.size() < (uniqueHits - 1) + 1)
-            duplicationRateUnique.resize((uniqueHits-1)+1);
+        const auto totalHits = val.second.first;
+        if (duplicationRateUnique.size() < uniqueHits)
+            duplicationRateUnique.resize(uniqueHits);
         ++duplicationRateUnique[uniqueHits - 1];
-        if (duplicationRate.size() < nonUniqueHits + 1)
-            duplicationRate.resize(nonUniqueHits+1);
-        ++duplicationRate[nonUniqueHits];
+        if (totalHits - uniqueHits > 0)
+        {
+            const auto nonUniqueHits = totalHits - uniqueHits;
+            if (duplicationRate.size() < nonUniqueHits)
+                duplicationRate.resize(nonUniqueHits);
+            ++duplicationRate[nonUniqueHits - 1];
+        }
     });
     saveBedForwardStrand.close();
     saveBedReverseStrand.close();
@@ -373,14 +377,20 @@ int main(int argc, char const * argv[])
     unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
     duplicationRateUnique.resize(maxLen);
     std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
+    unsigned int sumUniqueReads = 0;
+    unsigned int sumNonUniqueReads = 0;
     for (unsigned i = 0; i < maxLen;++i)
     {
         if (i > 0)
-            stats.totalSamePositionReads += (duplicationRate[i] * (i));
-        //std::cout << i+1 << " " << duplicationRateUnique[i] << " " << duplicationRate[i] << std::endl;
+            stats.totalSamePositionReads += (duplicationRate[i] * (i+1));
         fs << i + 1 << "\t" << duplicationRateUnique[i] << "\t" << duplicationRate[i] << std::endl;
         fs2 << i + 1 << "\t" << duplicationRateUnique[i]*(i+1) << "\t" << (duplicationRate[i])*(i+1) <<std::endl;
+        sumUniqueReads += duplicationRateUnique[i] * (i + 1);
+        sumNonUniqueReads += duplicationRate[i] * (i+1);
     }
+    assert(sumUniqueReads == stats.readsAfterFiltering);
+    assert(stats.totalReads == stats.couldNotMap + stats.couldNotMapUniquely + stats.totalMappedReads + stats.filteredReads);
+    assert(sumNonUniqueReads == stats.removedReads);
     t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
     duplicationRateUnique.clear();
