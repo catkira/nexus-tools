@@ -196,8 +196,6 @@ int main(int argc, char const * argv[])
 
         key1.init(record1);     
 
-        if (key1.get5EndPosition() == 2456246)
-            int a = 0;
         while (!atEnd(bamFileIn2) && lessEqualWithoutStrand(key2.init(record2), key1))
         {
             tempIdStorage.emplace(std::make_pair(getReadId(seqan::toCString(record2.qName)), key2.get5EndPosition()));
@@ -206,7 +204,7 @@ int main(int argc, char const * argv[])
         }
         const auto record1ReadId = getReadId(seqan::toCString(record1.qName));
         const auto it = tempIdStorage.find(record1ReadId);
-        if (it != tempIdStorage.end() && it->second == key1.get5EndPosition())
+        if (it != tempIdStorage.end() && it->second == static_cast<int>(key1.get5EndPosition()))
         {
             saveBam.write(record1);
             ++stats.matchingReads;

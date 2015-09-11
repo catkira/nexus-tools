@@ -57,8 +57,8 @@ struct PeakCandidate
     }
     Range<TEdgeDistribution> range;
     typename TEdgeDistribution::const_iterator centerIt;
-    unsigned int width;
     double score;
+    unsigned int width;
 };
 
 template <typename TEdgeDistribution>

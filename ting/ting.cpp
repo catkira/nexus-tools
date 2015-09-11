@@ -228,11 +228,11 @@ int main(int argc, char const * argv[])
     saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
     forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(peakCandidatesVector, saveBedCandidateScores, bamFileIn.context);
 
-    auto filter = [scoreLimit](const PeakCandidate<OccurenceMap>& peakCandidate)
-        {return peakCandidate.score > 10*scoreLimit ? true : false;};
-    std::map<unsigned int, unsigned int> bindingLengthDistribution;
+    //auto filter = [scoreLimit](const PeakCandidate<OccurenceMap>& peakCandidate)
+    //    {return peakCandidate.score > 10*scoreLimit ? true : false;};
+    //std::map<unsigned int, unsigned int> bindingLengthDistribution;
     //calculateBindingLengthDistribution(peakCandidatesVector, filter, bindingLengthDistribution);
-    std::map<unsigned int, double> bindingCharacteristicsMap;
+    //std::map<unsigned int, double> bindingCharacteristicsMap;
     const int maxDistance = 1000;
     //calculateScoreDistribution(peakCandidatesVector, calcScore, maxDistance, bindingCharacteristicsMap);
     //auto calcScoreWidth = [&range, ratioTolerance](const auto _it, auto& _tempSlidingWindowRange, auto _halfWindowWidth)
