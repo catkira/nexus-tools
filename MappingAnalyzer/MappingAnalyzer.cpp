@@ -204,7 +204,7 @@ int main(int argc, char const * argv[])
         }
         const auto record1ReadId = getReadId(seqan::toCString(record1.qName));
         const auto it = tempIdStorage.find(record1ReadId);
-        if (it != tempIdStorage.end() && it->second == static_cast<int>(key1.get5EndPosition()))
+        if (it != tempIdStorage.end() && it->second == static_cast<unsigned int>(key1.get5EndPosition()))
         {
             saveBam.write(record1);
             ++stats.matchingReads;
