@@ -3,6 +3,7 @@
 #print(args)
 
 filename <- "P:\\data\\preprocessed\\TEST\\TEST_duplication_rate_reads.txt"
+len <- 50;
 
 duplication_rate = read.table(filename, header=T, sep="\t") 
 
@@ -14,16 +15,16 @@ plot_colors = c("black","black","darkgray")
 line_types = c("dotted","solid","solid");
 
 # Start PNG device driver to save output to figure.png
-pdf("duplication_rate.pdf",)
+#pdf("duplication_rate.pdf",)
 
 # Graph autos using y axis that ranges from 0 to max_y.
 # Turn off axes and annotations (axis labels) so we can 
 # specify them ourself
 par(mar=c(5, 4, 4, 6) + 0.1)
 max_y = max(duplication_rate)
-plot(duplication_rate$rate[c(1:30)], duplication_rate$non.unique[c(1:30)]+duplication_rate$unique[c(1:30)], log="y",type="l", lty=line_types[1], col=plot_colors[1], axes=FALSE, ann=FALSE)
+plot(duplication_rate$rate[c(1:len)], duplication_rate$non.unique[c(1:len)]+duplication_rate$unique[c(1:len)], log="y",type="l", lty=line_types[1], col=plot_colors[1], axes=FALSE, ann=FALSE)
 
-axis(1, at=2*(1:15), labels=2*(1:15))
+axis(1, at=2*(1:len/2), labels=2*(1:len/2))
 
 #ylims <- c(0.2, max_y)
 #get_axp <- function(x) 10^c(ceiling(x[1]), floor(x[2]))
@@ -38,7 +39,7 @@ axis(2, at=axTicks(2,log=TRUE), labels=format(aty, scientific=TRUE))
 #axis(2, at=axTicks(2,log=TRUE), labels=labels)
 
 # Graph trucks with red dashed line and square points
-lines(duplication_rate$rate[c(1:30)],duplication_rate$unique[c(1:30)],type="l", lty=line_types[2], col=plot_colors[2])
+lines(duplication_rate$rate[c(1:len)],duplication_rate$unique[c(1:len)],type="l", lty=line_types[2], col=plot_colors[2])
 title(xlab= "Duplication Rate")
 title(ylab= "Number of Reads")
 box()
@@ -47,7 +48,7 @@ box()
 duplication_rate_difference <-  duplication_rate$non.unique / (duplication_rate$unique + duplication_rate$non.unique)
 max_y_difference = max(duplication_rate_difference)
 par(new=TRUE)
-plot(duplication_rate$rate[c(1:30)],duplication_rate_difference[c(1:30)], type="l", lty=line_types[3], col=plot_colors[3],ann=F, axes=F)
+plot(duplication_rate$rate[c(1:len)],duplication_rate_difference[c(1:len)], type="l", lty=line_types[3], col=plot_colors[3],ann=F, axes=F)
 mtext("Percentage PCR artifacts",side=4,col="black",line=4) 
 
 #aty_diff <- seq(0,1,by=0.2)

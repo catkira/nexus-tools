@@ -69,6 +69,12 @@ seqan::ArgumentParser buildParser(void)
     setMaxValue(ratioOpt, "100");
     addOption(parser, ratioOpt);
 
+    seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
+        "fc", "filterChromosomes", "Comma-seperated list of Chromosomes to filter out for calculation of QFragment-Length-Distribution",
+        seqan::ArgParseOption::STRING, "LIST");
+    setDefaultValue(filterChromosomesOpt, "");
+    addOption(parser, filterChromosomesOpt);
+
     seqan::ArgParseOption halfWindowSizeOpt = seqan::ArgParseOption(
         "w", "size", "Half window size",
         seqan::ArgParseOption::INTEGER, "VALUE");
@@ -153,6 +159,10 @@ int main(int argc, char const * argv[])
     seqan::CharString fileName1;
     getArgumentValue(fileName1, parser, 0, 0);
 
+    seqan::CharString _filterChromosomes;
+    seqan::getOptionValue(_filterChromosomes, parser, "fc");
+    std::string filterChromosomes = seqan::toCString(_filterChromosomes);
+
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
 
@@ -167,6 +177,7 @@ int main(int argc, char const * argv[])
 
     seqan::BamHeader header;
     readHeader(header, bamFileIn);
+    const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
 
     while (!atEnd(bamFileIn))
     {
@@ -232,7 +243,7 @@ int main(int argc, char const * argv[])
     t1 = std::chrono::steady_clock::now();
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
     std::vector<std::vector<unsigned int>> qFragLengthDistribution(maxDistance, std::vector<unsigned int>(numChr));
-    calculateQFragLengthDistribution(occurenceMap, qFragLengthDistribution, bamFileIn);
+    calculateQFragLengthDistribution(occurenceMap, qFragLengthDistribution, chromosomeFilter, bamFileIn);
     saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", qFragLengthDistribution, bamFileIn);
     t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;

@@ -61,7 +61,7 @@ seqan::ArgumentParser buildParser(void)
 
     setCategory(parser, "Chip Nexus/Exo Data Processing");
     setShortDescription(parser, "Preprocessing Pipeline for Chip-Nexus and Chip-Exo data");
-    addUsageLine(parser, " \\fI<READ_FILE1>\\fP \\fI<[READ_FILE2]>\\fP \\fI[OPTIONS]\\fP");
+    addUsageLine(parser, " \\fI<READ_FILE1>\\fP \\fI[OPTIONS]\\fP");
     addDescription(parser,
         "");
 
@@ -86,6 +86,10 @@ seqan::ArgumentParser buildParser(void)
         "b", "bedGraph", "Create a BedGraph file");
     addOption(parser, recordWriteBed);
 
+    seqan::ArgParseOption outputArtifactsOpt = seqan::ArgParseOption(
+        "oa", "outputArtifacts", "Write PCR artifacts to BAM file");
+    addOption(parser, outputArtifactsOpt);
+
     seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
         "r", "records", "Number of records to be read in one run.",
         seqan::ArgParseOption::INTEGER, "VALUE");
@@ -94,7 +98,7 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, recordOpt);
 
     seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
-        "fc", "filterChromosomes", "Comma-seperated list of Chromosomes to filter out",
+        "fc", "filterChromosomes", "Comma-seperated list of Chromosomes to filter out for calculation of QFragment-Length-Distribution",
         seqan::ArgParseOption::STRING, "LIST");
     setDefaultValue(filterChromosomesOpt, "");
     addOption(parser, filterChromosomesOpt);
@@ -159,29 +163,6 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
-template <typename TChromosomeNames>
-const auto calculateChromosomeFilter(const std::string& filterString, const TChromosomeNames& chromosomeNames)
-{
-    std::stringstream filterChromosomes_stringstream(filterString);
-    const auto numChromosomes = length(chromosomeNames);
-    std::string token;
-    std::set<unsigned int> chromosomeFilter;
-    while (getline(filterChromosomes_stringstream, token, ','))
-    {
-        bool found = false;
-        for (unsigned int i = 0;i < numChromosomes; ++i)
-            if (chromosomeNames[i] == token)
-            {
-                found = true;
-                chromosomeFilter.insert(i);
-                break;
-            }
-        if (!found)
-            std::cout << "Warning: ID for chromosome " << token << " not found, this chromosome won't be filtered." << std::endl;
-    }
-    return chromosomeFilter;
-}
-
 int main(int argc, char const * argv[])
 {
     // Additional checks
@@ -209,16 +190,11 @@ int main(int argc, char const * argv[])
     seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
     
     std::string outFilename;
-    if (fileCount == 2)
-    {
-        getArgumentValue(fileName2, parser, 0, 1);
-        outFilename = seqan::toCString(fileName2);
-    }
-    else
-        outFilename = getFilePrefix(argv[1]) + std::string("_filtered");
+    outFilename = getFilePrefix(argv[1]) + std::string("_filtered");
 
     const bool filter = seqan::isSet(parser, "f");
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
+    const bool outputArtifacts = seqan::isSet(parser, "oa");
     seqan::CharString _filterChromosomes;
     seqan::getOptionValue(_filterChromosomes, parser, "fc");
     std::string filterChromosomes = seqan::toCString(_filterChromosomes);
@@ -235,6 +211,7 @@ int main(int argc, char const * argv[])
     readHeader(header, bamFileIn);
     const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
     SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
+    std::vector<seqan::BamAlignmentRecord> artifacts;
     unsigned tagID = 0;
 
     while (!atEnd(bamFileIn))
@@ -243,11 +220,12 @@ int main(int argc, char const * argv[])
         if (atEnd(bamFileIn))
             break;
         ++stats.totalReads;
-        if (chromosomeFilter.find(record.rID) != chromosomeFilter.end())
-        {
-            ++stats.filteredReads;
-            continue;
-        }
+        // dont filter chromosomes here, only filter them for the generation of the QFragmentLengthDistribution
+        //if (chromosomefilter.find(record.rid) != chromosomefilter.end())
+        //{
+        //    ++stats.filteredreads;
+        //    continue;
+        //}
         const seqan::BamTagsDict tags(record.tags);
         if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
         {
@@ -267,7 +245,11 @@ int main(int argc, char const * argv[])
         const auto insertResult = keySet.insert(key);
         OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
         if (!insertResult.second)  // element was not inserted because it existed already
+        {
+            if (outputArtifacts)
+                artifacts.emplace_back(std::move(record));
             ++stats.removedReads; // stats.removedReads = total non unique hits
+        }
         else
         {
             saveBam.write(record);
@@ -281,6 +263,18 @@ int main(int argc, char const * argv[])
 
     auto t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+
+    if (outputArtifacts)
+    {
+        std::cout << "writing artifacts to file... ";
+        auto t1 = std::chrono::steady_clock::now();
+        SaveBam<seqan::BamFileIn> saveArtifactsBam(header, bamFileIn, getFilePrefix(argv[1]) + "_artifacts");
+        for (auto element : artifacts)
+            saveArtifactsBam.write(std::move(element));
+        saveArtifactsBam.close();
+        auto t2 = std::chrono::steady_clock::now();
+        std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
+    }
 
     const std::string outFilename2 = getFilePrefix(argv[1]) + std::string("_filtered2");
     if (filter)
@@ -399,7 +393,7 @@ int main(int argc, char const * argv[])
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
     const unsigned int maxDistance = 1000;
     std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, bamFileIn);
+    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, chromosomeFilter, bamFileIn);
     saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", crossCorrelation, bamFileIn);
     estimateFragmentLength(crossCorrelation, stats.estimatedFragmentLength);
     std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;

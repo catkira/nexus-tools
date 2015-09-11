@@ -281,6 +281,29 @@ void estimateFragmentLength(const TCrossCorrelation crossCorrelation, unsigned i
     }
 }
 
+template <typename TChromosomeNames>
+const auto calculateChromosomeFilter(const std::string& filterString, const TChromosomeNames& chromosomeNames)
+{
+    std::stringstream filterChromosomes_stringstream(filterString);
+    const auto numChromosomes = length(chromosomeNames);
+    std::string token;
+    std::set<unsigned int> chromosomeFilter;
+    while (getline(filterChromosomes_stringstream, token, ','))
+    {
+        bool found = false;
+        for (unsigned int i = 0;i < numChromosomes; ++i)
+            if (chromosomeNames[i] == token)
+            {
+                found = true;
+                chromosomeFilter.insert(i);
+                break;
+            }
+        if (!found)
+            std::cout << "Warning: ID for chromosome " << token << " not found, this chromosome won't be filtered." << std::endl;
+    }
+    return chromosomeFilter;
+}
+
 template <typename TCrossCorrelation>
 void saveQFragLengthDistribution(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn)
 {
@@ -307,8 +330,8 @@ void saveQFragLengthDistribution(const std::string& filename, TCrossCorrelation 
     fs.close();
 }
 
-template <typename TEdgeDistribution, typename TLengthDistribution>
-void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
+template <typename TEdgeDistribution, typename TLengthDistribution, typename TFilter>
+void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, const TFilter& filter, seqan::BamFileIn& bamFileIn)
 {
     const auto maxDistance = lengthDistribution.size();
     seqan::BedRecord<seqan::Bed4> bedRecord;
@@ -319,6 +342,8 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
         auto tempIt = std::next(it, 1);
         int distance = 0;
         if (getKey(*it).isReverseStrand())
+            continue;
+        if (!filter.empty() && filter.find(getKey(*it).getRID()) != filter.end())
             continue;
         bedRecord.rID = getKey(*it).getRID();
         bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
@@ -342,6 +367,13 @@ void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution,
             tempIt++;
         }
     }
+}
+
+template <typename TEdgeDistribution, typename TLengthDistribution>
+void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
+{
+    std::set<unsigned int> emptySet;
+    calculateQFragLengthDistribution(edgeDistribution, lengthDistribution, emptySet, bamFileIn);
 }
 
 template <typename TEdgeDistribution, typename TCalcScore, typename TScoreDistribution>
