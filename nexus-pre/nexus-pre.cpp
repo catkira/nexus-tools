@@ -220,6 +220,8 @@ int main(int argc, char const * argv[])
         if (atEnd(bamFileIn))
             break;
         ++stats.totalReads;
+        if (stats.totalReads == 100000)
+            break;
         // dont filter chromosomes here, only filter them for the generation of the QFragmentLengthDistribution
         //if (chromosomefilter.find(record.rid) != chromosomefilter.end())
         //{
@@ -370,6 +372,7 @@ int main(int argc, char const * argv[])
     fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
     unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
     duplicationRateUnique.resize(maxLen);
+    duplicationRate.resize(maxLen);
     std::vector<unsigned>::iterator it = duplicationRateUnique.begin();
     unsigned int sumUniqueReads = 0;
     unsigned int sumNonUniqueReads = 0;
@@ -382,7 +385,7 @@ int main(int argc, char const * argv[])
         sumUniqueReads += duplicationRateUnique[i] * (i + 1);
         sumNonUniqueReads += duplicationRate[i] * (i+1);
     }
-    assert(sumUniqueReads == stats.readsAfterFiltering);
+    assert(sumUniqueReads == stats.totalMappedReads - stats.removedReads);
     assert(stats.totalReads == stats.couldNotMap + stats.couldNotMapUniquely + stats.totalMappedReads + stats.filteredReads);
     assert(sumNonUniqueReads == stats.removedReads);
     t2 = std::chrono::steady_clock::now();
