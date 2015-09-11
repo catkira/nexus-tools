@@ -220,8 +220,6 @@ int main(int argc, char const * argv[])
         if (atEnd(bamFileIn))
             break;
         ++stats.totalReads;
-        if (stats.totalReads == 100000)
-            break;
         // dont filter chromosomes here, only filter them for the generation of the QFragmentLengthDistribution
         //if (chromosomefilter.find(record.rid) != chromosomefilter.end())
         //{
