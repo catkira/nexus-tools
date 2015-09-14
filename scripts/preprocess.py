@@ -140,7 +140,9 @@ if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
  
 #nexus-pre
 nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
-nexusOutputFilenameSplit = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
+if results.random_split == True:
+	nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split1.bam"
+nexusOutputFilenameSplit2 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
 
 if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
     args = ("nexus-pre", bowtieOutputFilename,  "-fc", results.filter_chromosomes)
@@ -158,8 +160,8 @@ if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
 
 indexBamFile(nexusOutputFilename)			
 if results.random_split == True:
-	indexBamFile(nexusOutputFilenameSplit)		
- 
+	indexBamFile(nexusOutputFilenameSplit2)		
+	
 #cleanup
 if results.clean:
     print "deleting intermediate files..."

@@ -266,7 +266,7 @@ int main(int argc, char const * argv[])
     srand(time(NULL));
 
     auto artifactWriter = [&artifacts](seqan::BamAlignmentRecord&& record) {return artifacts.emplace_back(record);};
-    auto noArtifactWriter = [](seqan::BamAlignmentRecord&& record) {return;};
+    auto noArtifactWriter = [](seqan::BamAlignmentRecord&& record) {(void)record;return;};
 
     if (randomSplit)
     {
