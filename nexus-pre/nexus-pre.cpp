@@ -253,7 +253,6 @@ int main(int argc, char const * argv[])
     std::string filterChromosomes = seqan::toCString(_filterChromosomes);
 
     OccurenceMap occurenceMap;
-
     Statistics stats;
 
     std::cout << "barcode filtering... ";
@@ -264,10 +263,9 @@ int main(int argc, char const * argv[])
     const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
     std::vector<seqan::BamAlignmentRecord> artifacts;
     srand(time(NULL));
-
+    // dynamic parameter dispatching to processBamFile depending on randomSplit and outputArtifacts
     auto artifactWriter = [&artifacts](seqan::BamAlignmentRecord&& record) {return artifacts.emplace_back(record);};
     auto noArtifactWriter = [](seqan::BamAlignmentRecord&& record) {(void)record;return;};
-
     if (randomSplit)
     {
         SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
@@ -300,7 +298,6 @@ int main(int argc, char const * argv[])
             processBamFile(bamFileIn, noArtifactWriter, bamWriter, occurenceMap, stats);
         saveBam.close();
     }
-
     auto t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
 
@@ -357,7 +354,6 @@ int main(int argc, char const * argv[])
     }
 
     seqan::BedRecord<seqan::Bed4> bedRecord;
-
     std::vector<unsigned> duplicationRateUnique;
     std::vector<unsigned> duplicationRate;
     std::for_each(occurenceMap.begin(), occurenceMap.end(), [&](const OccurenceMap::value_type& val)
@@ -446,5 +442,9 @@ int main(int argc, char const * argv[])
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out);
 #endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
+    fs3 << "Command line\t";
+    for (unsigned int n = 0; n < argc;++n)
+        fs3 << argv[n] << "\t";
+    fs3.close();
 	return 0;
 }

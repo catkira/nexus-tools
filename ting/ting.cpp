@@ -57,9 +57,9 @@ seqan::ArgumentParser buildParser(void)
     setDefaultValue(outputOpt, "");
     addOption(parser, outputOpt);
 
-    seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
-        "np", "narrowPeak", "Create a narrow peak file");
-    addOption(parser, recordWriteBed);
+    //seqan::ArgParseOption recordWriteBed = seqan::ArgParseOption(
+    //    "np", "narrowPeak", "Create a narrow peak file");
+    //addOption(parser, recordWriteBed);
 
     seqan::ArgParseOption ratioOpt = seqan::ArgParseOption(
         "t", "tolerance", "Score ratio tolerance between first and second half Window (1.0 := 100%)",
