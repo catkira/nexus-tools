@@ -443,7 +443,7 @@ int main(int argc, char const * argv[])
 #endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
     fs3 << "Command line\t";
-    for (unsigned int n = 0; n < argc;++n)
+    for (int n = 0; n < argc;++n)
         fs3 << argv[n] << "\t";
     fs3.close();
 	return 0;

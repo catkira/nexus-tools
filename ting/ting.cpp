@@ -166,7 +166,7 @@ int main(int argc, char const * argv[])
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn(seqan::toCString(fileName1));
 
-    const bool narrowPeakEnabled = seqan::isSet(parser, "np");
+    //const bool narrowPeakEnabled = seqan::isSet(parser, "np");
 
     OccurenceMap occurenceMap;
     Statistics stats;
