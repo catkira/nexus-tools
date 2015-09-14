@@ -169,6 +169,52 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
+template <typename TOccurenceMap, typename TArtifactWriter, typename TBamWriter>
+void processBamFile(seqan::BamFileIn& bamFileIn, const TArtifactWriter& artifactWriter, const TBamWriter& bamWriter, TOccurenceMap &occurenceMap, Statistics& stats)
+{
+    seqan::BamAlignmentRecord record;
+    unsigned tagID = 0;
+    std::set<BamRecordKey<WithBarcode>> keySet;
+
+    while (!atEnd(bamFileIn))
+    {
+        readRecord(record, bamFileIn);
+        if (atEnd(bamFileIn))
+            break;
+        ++stats.totalReads;
+        const seqan::BamTagsDict tags(record.tags);
+        if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
+        {
+            __int32 tagValue = 0;
+            extractTagValue(tagValue, tags, tagID);
+            if (tagValue == 0)
+                ++stats.couldNotMap;
+            else
+                ++stats.couldNotMapUniquely;
+        }
+        if (record.flag != 0x00 && record.flag != 0x10)
+            continue;
+
+        ++stats.totalMappedReads;
+        const BamRecordKey<WithBarcode> key(record);
+        const BamRecordKey<NoBarcode> pos(record);
+        const auto insertResult = keySet.insert(key);
+        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
+        if (!insertResult.second)  // element was not inserted because it existed already
+        {
+            artifactWriter(std::move(record));
+            ++stats.removedReads; // stats.removedReads = total non unique hits
+        }
+        else
+        {
+            bamWriter(std::move(record));
+            ++mapItem.second; // unique hits
+        }
+        // total hits
+        ++mapItem.first;
+    }
+}
+
 int main(int argc, char const * argv[])
 {
     // Additional checks
@@ -206,7 +252,6 @@ int main(int argc, char const * argv[])
     seqan::getOptionValue(_filterChromosomes, parser, "fc");
     std::string filterChromosomes = seqan::toCString(_filterChromosomes);
 
-    std::set<BamRecordKey<WithBarcode>> keySet;
     OccurenceMap occurenceMap;
 
     Statistics stats;
@@ -217,67 +262,41 @@ int main(int argc, char const * argv[])
     seqan::BamHeader header;
     readHeader(header, bamFileIn);
     const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
-    SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
-    SaveBam<seqan::BamFileIn> saveBamSplit2(header, bamFileIn, outFilename+"_split2");
     std::vector<seqan::BamAlignmentRecord> artifacts;
-    unsigned tagID = 0;
     srand(time(NULL));
 
-    while (!atEnd(bamFileIn))
+    auto artifactWriter = [&artifacts](seqan::BamAlignmentRecord&& record) {return artifacts.emplace_back(record);};
+    auto noArtifactWriter = [](seqan::BamAlignmentRecord&& record) {return;};
+
+    if (randomSplit)
     {
-        readRecord(record, bamFileIn);
-        if (atEnd(bamFileIn))
-            break;
-        ++stats.totalReads;
-        // dont filter chromosomes here, only filter them for the generation of the QFragmentLengthDistribution
-        //if (chromosomefilter.find(record.rid) != chromosomefilter.end())
-        //{
-        //    ++stats.filteredreads;
-        //    continue;
-        //}
-        const seqan::BamTagsDict tags(record.tags);
-        if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
-        {
-            __int32 tagValue = 0;
-            extractTagValue(tagValue, tags, tagID);
-            if (tagValue == 0)
-                ++stats.couldNotMap;
+        SaveBam<seqan::BamFileIn> saveBamSplit1(header, bamFileIn, outFilename + "_split1");
+        SaveBam<seqan::BamFileIn> saveBamSplit2(header, bamFileIn, outFilename + "_split2");
+        auto bamWriterSplit = [&saveBamSplit1, &saveBamSplit2](seqan::BamAlignmentRecord&& record) {
+            if (rand() % 2)
+                saveBamSplit1.write(record);
             else
-                ++stats.couldNotMapUniquely;
-        }
-        if (record.flag != 0x00 && record.flag != 0x10)
-            continue;
-        
-        ++stats.totalMappedReads;
-        const BamRecordKey<WithBarcode> key(record);
-        const BamRecordKey<NoBarcode> pos(record);
-        const auto insertResult = keySet.insert(key);
-        OccurenceMap::mapped_type &mapItem = occurenceMap[pos];
-        if (!insertResult.second)  // element was not inserted because it existed already
-        {
-            if (outputArtifacts)
-                artifacts.emplace_back(std::move(record));
-            ++stats.removedReads; // stats.removedReads = total non unique hits
-        }
+                saveBamSplit2.write(record);
+            return;};
+
+        if(outputArtifacts)
+            processBamFile(bamFileIn, artifactWriter, bamWriterSplit, occurenceMap, stats);
         else
-        {
-            if (randomSplit)
-            {
-                if(rand()%2)
-                    saveBam.write(record);
-                else
-                    saveBamSplit2.write(record);
-            }
-            else
-                saveBam.write(record);
-            ++mapItem.second; // unique hits
-        }
-        // total hits
-        ++mapItem.first;
+            processBamFile(bamFileIn, noArtifactWriter, bamWriterSplit, occurenceMap, stats);
+        saveBamSplit1.close();
+        saveBamSplit2.close();
     }
-    saveBam.close();
-    saveBamSplit2.close();
-    seqan::clear(keySet);
+    else
+    {
+        SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
+        auto bamWriter = [&saveBam](seqan::BamAlignmentRecord&& record) {return saveBam.write(record);};
+
+        if (outputArtifacts)
+            processBamFile(bamFileIn, artifactWriter, bamWriter, occurenceMap, stats);
+        else
+            processBamFile(bamFileIn, noArtifactWriter, bamWriter, occurenceMap, stats);
+        saveBam.close();
+    }
 
     auto t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
