@@ -141,10 +141,12 @@ if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
 #nexus-pre
 nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
 if results.random_split == True:
-	nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split1.bam"
-nexusOutputFilenameSplit2 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
+	nexusOutputFilenameSplit1 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split1.bam"
+	nexusOutputFilenameSplit2 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
 
-if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
+if (os.path.isfile(nexusOutputFilename) == False or 
+(results.random_split == True and (os.path.isfile(nexusOutputFilenameSplit1) == False or os.path.isfile(nexusOutputFilenameSplit2) == False)) or
+results.overwrite == True):
     args = ("nexus-pre", bowtieOutputFilename,  "-fc", results.filter_chromosomes)
     if results.random_split == True:
 		args += ("-rs",)
@@ -161,6 +163,7 @@ if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
 indexBamFile(nexusOutputFilename)			
 if results.random_split == True:
 	indexBamFile(nexusOutputFilenameSplit2)		
+	indexBamFile(nexusOutputFilenameSplit1)		
 	
 #cleanup
 if results.clean:

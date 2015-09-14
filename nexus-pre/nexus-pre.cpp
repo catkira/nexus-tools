@@ -270,9 +270,11 @@ int main(int argc, char const * argv[])
 
     if (randomSplit)
     {
+        SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
         SaveBam<seqan::BamFileIn> saveBamSplit1(header, bamFileIn, outFilename + "_split1");
         SaveBam<seqan::BamFileIn> saveBamSplit2(header, bamFileIn, outFilename + "_split2");
-        auto bamWriterSplit = [&saveBamSplit1, &saveBamSplit2](seqan::BamAlignmentRecord&& record) {
+        auto bamWriterSplit = [&saveBam, &saveBamSplit1, &saveBamSplit2](seqan::BamAlignmentRecord&& record) {
+            saveBam.write(record);
             if (rand() % 2)
                 saveBamSplit1.write(record);
             else
@@ -283,6 +285,7 @@ int main(int argc, char const * argv[])
             processBamFile(bamFileIn, artifactWriter, bamWriterSplit, occurenceMap, stats);
         else
             processBamFile(bamFileIn, noArtifactWriter, bamWriterSplit, occurenceMap, stats);
+        saveBam.close();
         saveBamSplit1.close();
         saveBamSplit2.close();
     }
