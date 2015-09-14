@@ -42,7 +42,6 @@ find_package (CXX11 REQUIRED)
 find_package (CXX14 REQUIRED)
 
 # Add definitions set by the build system.
-add_definitions (-DSEQAN_APP_VERSION="${SEQAN_APP_VERSION}")
 add_definitions (-DSEQAN_REVISION="${SEQAN_REVISION}")
 add_definitions (-DSEQAN_DATE="${SEQAN_DATE}")
 

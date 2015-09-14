@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 project(test-app)
 message (STATUS "Configuring test-app")
 
-
+add_definitions (-DSEQAN_APP_VERSION="1.0.0")
 
 # Search SeqAn and select dependencies.
 set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB)
