@@ -35,6 +35,7 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool cluste
         stream << "Non mappable reads" << "\t" << stats.couldNotMap << std::endl;
         stream << "Non uniquely mappable reads" << "\t" << stats.couldNotMapUniquely << std::endl;
         stream << "After barcode filtering" << "\t" << stats.totalMappedReads - stats.removedReads << "\t" << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "PCR duplication rate" << "\t" << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
         stream << "Total duplet reads" << "\t" << stats.totalSamePositionReads << std::endl;
         stream << "Estimated fragment Length" << "\t" << stats.estimatedFragmentLength << std::endl;
         if (clusterFiltering)
@@ -48,6 +49,7 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool cluste
         stream << "Non mappable reads                   : " << stats.couldNotMap << std::endl;
         stream << "Non uniquely mappable reads          : " << stats.couldNotMapUniquely << std::endl;
         stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "PCR duplication rate                 : " << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
         stream << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
         stream << "Estimated fragment length            : " << stats.estimatedFragmentLength << std::endl;
         if (clusterFiltering)
@@ -89,6 +91,10 @@ seqan::ArgumentParser buildParser(void)
     seqan::ArgParseOption outputArtifactsOpt = seqan::ArgParseOption(
         "oa", "outputArtifacts", "Write PCR artifacts to BAM file");
     addOption(parser, outputArtifactsOpt);
+
+    seqan::ArgParseOption randomSplitOpt = seqan::ArgParseOption(
+        "rs", "randomSplit", "Split output randomly into two files");
+    addOption(parser, randomSplitOpt);
 
     seqan::ArgParseOption recordOpt = seqan::ArgParseOption(
         "r", "records", "Number of records to be read in one run.",
@@ -195,6 +201,7 @@ int main(int argc, char const * argv[])
     const bool filter = seqan::isSet(parser, "f");
     const bool bedOutputEnabled = seqan::isSet(parser, "b");
     const bool outputArtifacts = seqan::isSet(parser, "oa");
+    const bool randomSplit = seqan::isSet(parser, "rs");
     seqan::CharString _filterChromosomes;
     seqan::getOptionValue(_filterChromosomes, parser, "fc");
     std::string filterChromosomes = seqan::toCString(_filterChromosomes);
@@ -211,8 +218,10 @@ int main(int argc, char const * argv[])
     readHeader(header, bamFileIn);
     const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
     SaveBam<seqan::BamFileIn> saveBam(header, bamFileIn, outFilename);
+    SaveBam<seqan::BamFileIn> saveBamSplit2(header, bamFileIn, outFilename+"_split2");
     std::vector<seqan::BamAlignmentRecord> artifacts;
     unsigned tagID = 0;
+    srand(time(NULL));
 
     while (!atEnd(bamFileIn))
     {
@@ -252,13 +261,22 @@ int main(int argc, char const * argv[])
         }
         else
         {
-            saveBam.write(record);
+            if (randomSplit)
+            {
+                if(rand()%2)
+                    saveBam.write(record);
+                else
+                    saveBamSplit2.write(record);
+            }
+            else
+                saveBam.write(record);
             ++mapItem.second; // unique hits
         }
         // total hits
         ++mapItem.first;
     }
     saveBam.close();
+    saveBamSplit2.close();
     seqan::clear(keySet);
 
     auto t2 = std::chrono::steady_clock::now();
@@ -366,8 +384,8 @@ int main(int argc, char const * argv[])
     fs.open(getFilePrefix(argv[1]) + "_duplication_rate_positions.txt", std::fstream::out);
     fs2.open(getFilePrefix(argv[1]) + "_duplication_rate_reads.txt", std::fstream::out);
 #endif
-    fs << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
-    fs2 << "rate" << "\t" << "unique" << "\t" << "non unique" << std::endl;
+    fs << "rate" << "\t" << "unique" << "\t" << "non_unique" << std::endl;
+    fs2 << "rate" << "\t" << "unique" << "\t" << "non_unique" << std::endl;
     unsigned maxLen = duplicationRateUnique.size() > duplicationRate.size() ? duplicationRateUnique.size() : duplicationRate.size();
     duplicationRateUnique.resize(maxLen);
     duplicationRate.resize(maxLen);

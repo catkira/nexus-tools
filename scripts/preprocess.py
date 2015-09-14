@@ -9,6 +9,19 @@ import platform
 #print 'Number of arguments:', len(sys.argv), 'arguments.'
 #print 'Argument List:', str(sys.argv)
 
+def indexBamFile(filename):
+	args = ("python", os.path.dirname(os.path.realpath(__file__)) + "/bam_indexer.py", filename)
+	print "Creating indexed bam file..."
+	popen = subprocess.Popen(args, stdout=subprocess.PIPE)
+	popen.wait()
+	output = popen.stdout.read()
+	if results.verbose == True:
+		print output
+	if popen.returncode != 0:
+		print "error"
+		sys.exit()
+	return;
+
 flexbar_er = "0.2";
 flexbar_ol = "4";
 flexbar_fm = "4";
@@ -27,6 +40,7 @@ parser.add_argument('--num_threads', nargs='?', default = "4")
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
 parser.add_argument('--filter_chromosomes', type=str, default="")
+parser.add_argument('--random_split', action='store_true')
 parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
@@ -111,10 +125,9 @@ if (os.path.isfile(genomeIndexFile + ".1.ebwt") == False):
 
 
 if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
-    if(platform.system() == "Linux" or platform.system() == "Linux2"):
-     args = (bowtieLocation + "bowtie", "-S", "-p", results.num_threads, "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
-    else:
-     args = ("python", bowtieLocation + "bowtie", "-S", "-p", results.num_threads, "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
+    args = (bowtieLocation + "bowtie", "-S", "-p", results.num_threads, "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
+    if(platform.system() != "Linux" and platform.system() != "Linux2"):
+     args = ("python",) + args
     print "Mapping reads..."
     popen = subprocess.Popen(args, stdout=subprocess.PIPE)
     popen.wait()
@@ -127,9 +140,12 @@ if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
  
 #nexus-pre
 nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
+nexusOutputFilenameSplit = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
 
 if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
     args = ("nexus-pre", bowtieOutputFilename,  "-fc", results.filter_chromosomes)
+    if results.random_split == True:
+		args += ("-rs",)
     print "Filtering post-mapping barcodes..."
     popen = subprocess.Popen(args, stdout=subprocess.PIPE)
     popen.wait()
@@ -140,17 +156,9 @@ if (os.path.isfile(nexusOutputFilename) == False or results.overwrite == True):
         print "error"
         sys.exit()
 
-args = ("python", os.path.dirname(os.path.realpath(__file__)) + "/bam_indexer.py", nexusOutputFilename)
-print "Creating indexed bam file..."
-popen = subprocess.Popen(args, stdout=subprocess.PIPE)
-popen.wait()
-output = popen.stdout.read()
-if results.verbose == True:
-    print output
-if popen.returncode != 0:
-    print "error"
-    sys.exit()
- 
+indexBamFile(nexusOutputFilename)			
+if results.random_split == True:
+	indexBamFile(nexusOutputFilenameSplit)		
  
 #cleanup
 if results.clean:
