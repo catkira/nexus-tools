@@ -105,8 +105,7 @@ seqan::ArgumentParser buildParser(void)
 
     seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
         "fc", "filterChromosomes", "Regular expression to remove chromosomes from calculation of QFragment-Length-Distribution",
-        seqan::ArgParseOption::STRING, "LIST");
-    setDefaultValue(filterChromosomesOpt, "");
+        seqan::ArgParseOption::STRING, "REGEX");
     addOption(parser, filterChromosomesOpt);
 
     return parser;

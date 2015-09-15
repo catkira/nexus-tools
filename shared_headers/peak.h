@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <vector>
 #include <functional>
+#include <regex>
 
 template<typename TContainer>
 using Range = std::pair<typename TContainer::const_iterator, typename TContainer::const_iterator>;
@@ -284,23 +285,15 @@ void estimateFragmentLength(const TCrossCorrelation crossCorrelation, unsigned i
 template <typename TChromosomeNames>
 const auto calculateChromosomeFilter(const std::string& filterString, const TChromosomeNames& chromosomeNames)
 {
-    std::stringstream filterChromosomes_stringstream(filterString);
     const auto numChromosomes = length(chromosomeNames);
-    std::string token;
     std::set<unsigned int> chromosomeFilter;
-    while (getline(filterChromosomes_stringstream, token, ','))
-    {
-        bool found = false;
-        for (unsigned int i = 0;i < numChromosomes; ++i)
-            if (chromosomeNames[i] == token)
-            {
-                found = true;
-                chromosomeFilter.insert(i);
-                break;
-            }
-        if (!found)
-            std::cout << "Warning: ID for chromosome " << token << " not found, this chromosome won't be filtered." << std::endl;
-    }
+    std::regex re(filterString);
+    for (unsigned int i = 0;i < numChromosomes; ++i)
+        if (std::regex_match(seqan::toCString(chromosomeNames[i]), re))
+        {
+            chromosomeFilter.insert(i);
+            //std::cout << "Filtering chromosome " << chromosomeNames[i] << std::endl;
+        }
     return chromosomeFilter;
 }
 
