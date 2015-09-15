@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.1)
 project(ting)
 message (STATUS "Configuring ting")
 
-
+add_definitions (-DSEQAN_APP_VERSION="1.0.0")
 
 # Search SeqAn and select dependencies.
 set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB)
