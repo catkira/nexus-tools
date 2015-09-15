@@ -70,7 +70,7 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, ratioOpt);
 
     seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
-        "fc", "filterChromosomes", "Comma-seperated list of Chromosomes to filter out for calculation of QFragment-Length-Distribution",
+        "fc", "filterChromosomes", "Regular expression to remove chromosomes from calculation of QFragment-Length-Distribution",
         seqan::ArgParseOption::STRING, "LIST");
     setDefaultValue(filterChromosomesOpt, "");
     addOption(parser, filterChromosomesOpt);
