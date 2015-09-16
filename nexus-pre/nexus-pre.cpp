@@ -104,7 +104,7 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, recordOpt);
 
     seqan::ArgParseOption filterChromosomesOpt = seqan::ArgParseOption(
-        "fc", "filterChromosomes", "Regular expression to remove chromosomes from calculation of QFragment-Length-Distribution",
+        "fc", "filterChromosomes", "Regular expression to remove chromosomes",
         seqan::ArgParseOption::STRING, "REGEX");
     addOption(parser, filterChromosomesOpt);
 
@@ -168,8 +168,9 @@ unsigned getUniqueFrequency(const OccurenceMap::value_type& val)
     return val.second.second;
 }
 
-template <typename TOccurenceMap, typename TArtifactWriter, typename TBamWriter>
-void processBamFile(seqan::BamFileIn& bamFileIn, const TArtifactWriter& artifactWriter, const TBamWriter& bamWriter, TOccurenceMap &occurenceMap, Statistics& stats)
+template <typename TOccurenceMap, typename TArtifactWriter, typename TChromosomeFilter, typename TBamWriter>
+void processBamFile(seqan::BamFileIn& bamFileIn, const TArtifactWriter& artifactWriter, const TBamWriter& bamWriter, 
+    const TChromosomeFilter& chromosomeFilter, TOccurenceMap &occurenceMap, Statistics& stats)
 {
     seqan::BamAlignmentRecord record;
     unsigned tagID = 0;
@@ -181,6 +182,11 @@ void processBamFile(seqan::BamFileIn& bamFileIn, const TArtifactWriter& artifact
         if (atEnd(bamFileIn))
             break;
         ++stats.totalReads;
+        if (chromosomeFilter.find(record.rID) != chromosomeFilter.end())
+        {
+            ++stats.filteredReads;
+            continue;
+        }
         const seqan::BamTagsDict tags(record.tags);
         if (seqan::findTagKey(tagID, tags, seqan::CharString("XM")))
         {
@@ -259,7 +265,7 @@ int main(int argc, char const * argv[])
     seqan::BamAlignmentRecord record;
     seqan::BamHeader header;
     readHeader(header, bamFileIn);
-    const auto chromosomeFilter = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
+    const auto chromosomeFilterSet = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
     std::vector<seqan::BamAlignmentRecord> artifacts;
     srand(time(NULL));
     // dynamic parameter dispatching to processBamFile depending on randomSplit and outputArtifacts
@@ -279,9 +285,9 @@ int main(int argc, char const * argv[])
             return;};
 
         if(outputArtifacts)
-            processBamFile(bamFileIn, artifactWriter, bamWriterSplit, occurenceMap, stats);
+            processBamFile(bamFileIn, artifactWriter, bamWriterSplit, chromosomeFilterSet, occurenceMap, stats);
         else
-            processBamFile(bamFileIn, noArtifactWriter, bamWriterSplit, occurenceMap, stats);
+            processBamFile(bamFileIn, noArtifactWriter, bamWriterSplit, chromosomeFilterSet, occurenceMap, stats);
         saveBam.close();
         saveBamSplit1.close();
         saveBamSplit2.close();
@@ -292,9 +298,9 @@ int main(int argc, char const * argv[])
         auto bamWriter = [&saveBam](seqan::BamAlignmentRecord&& record) {return saveBam.write(record);};
 
         if (outputArtifacts)
-            processBamFile(bamFileIn, artifactWriter, bamWriter, occurenceMap, stats);
+            processBamFile(bamFileIn, artifactWriter, bamWriter, chromosomeFilterSet, occurenceMap, stats);
         else
-            processBamFile(bamFileIn, noArtifactWriter, bamWriter, occurenceMap, stats);
+            processBamFile(bamFileIn, noArtifactWriter, bamWriter, chromosomeFilterSet, occurenceMap, stats);
         saveBam.close();
     }
     auto t2 = std::chrono::steady_clock::now();
@@ -429,7 +435,7 @@ int main(int argc, char const * argv[])
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
     const unsigned int maxDistance = 1000;
     std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, chromosomeFilter, bamFileIn);
+    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, chromosomeFilterSet, bamFileIn);
     saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", crossCorrelation, bamFileIn);
     estimateFragmentLength(crossCorrelation, stats.estimatedFragmentLength);
     std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;
