@@ -435,7 +435,7 @@ int main(int argc, char const * argv[])
     const auto numChr = seqan::length(contigNames(context(bamFileIn)));
     const unsigned int maxDistance = 1000;
     std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, chromosomeFilterSet, bamFileIn);
+    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, bamFileIn);
     saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", crossCorrelation, bamFileIn);
     estimateFragmentLength(crossCorrelation, stats.estimatedFragmentLength);
     std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;
