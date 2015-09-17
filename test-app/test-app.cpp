@@ -77,6 +77,31 @@ void runBenchmark()
 
 int main(int argc, char const * argv[])
 {
+    seqan::CharString str1, str2;
+    str1 = "abcd";
+    std::cout << "str1: " << str1 << "  str2:" << str2 << std::endl;
+    str2 = std::move(str1);
+    std::cout << "str1: " << str1 << "  str2:" << str2 << std::endl;
+
+
+    std::vector<seqan::CharString> stringVector = { "hallo", "welt","ni","hao","hello","world"};
+
+    for (auto& element : stringVector)
+        std::cout << element << " ";
+    std::cout << std::endl;
+
+    unsigned int keep = 0;
+    for (auto& element : stringVector)
+        if (element == "ni" || element == "hao")
+            stringVector[keep++] = std::move(element);
+    resize(stringVector, keep);
+
+    for (auto& element : stringVector)
+        std::cout << element << " ";
+    std::cout << std::endl;
+
+
+    return 0;
     std::cout << "std::string\n";
     runBenchmark<std::string>();
     std::cout << "\n\nseqan::CharString\n";
