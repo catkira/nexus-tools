@@ -7,6 +7,10 @@ add_definitions (-DSEQAN_APP_VERSION="1.0.0")
 # Search SeqAn and select dependencies.
 set (SEQAN_FIND_DEPENDENCIES OpenMP ZLIB)
 find_package (SeqAn REQUIRED)
+find_package (CXX11 REQUIRED)
+find_package (CXX14 REQUIRED)
+
+set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS} ${CXX14_CXX_FLAGS}")
 
 # Warn if OpenMP was not found.
 if (NOT ${SEQAN_HAS_OPENMP})
