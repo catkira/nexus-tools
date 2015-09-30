@@ -4,7 +4,7 @@ cd nexus-tools_build
 export CXX=/usr/bin/g++-5
 cmake -DLINUX_STATIC:BOOL=ON -DCMAKE_BUILD_TYPE=Release ../nexus-tools
 make ting
-make seqan_flexbar
+make flexbar++
 make nexus-pre
 make MappingAnalyzer
 cp -f bin/ting ../nexus-tools/bin/
