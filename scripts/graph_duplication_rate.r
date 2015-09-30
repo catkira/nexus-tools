@@ -15,14 +15,15 @@ plot_colors = c("black","black","darkgray")
 line_types = c("dotted","solid","solid");
 
 # Start PNG device driver to save output to figure.png
-#pdf("duplication_rate.pdf",)
+#pdf("duplication_rate.pdf")
+#png("duplication_rate.png", width=800, height=600)
 
 # Graph autos using y axis that ranges from 0 to max_y.
 # Turn off axes and annotations (axis labels) so we can 
 # specify them ourself
 par(mar=c(5, 4, 4, 6) + 0.1)
 max_y = max(duplication_rate)
-plot(duplication_rate$rate[c(1:len)], duplication_rate$non.unique[c(1:len)]+duplication_rate$unique[c(1:len)], log="y",type="l", lty=line_types[1], col=plot_colors[1], axes=FALSE, ann=FALSE)
+plot(duplication_rate$rate[c(1:len)], duplication_rate$non_unique[c(1:len)]+duplication_rate$unique[c(1:len)], log="y",type="l", lty=line_types[1], col=plot_colors[1], axes=FALSE, ann=FALSE)
 
 axis(1, at=2*(1:len/2), labels=2*(1:len/2))
 
@@ -45,10 +46,13 @@ title(ylab= "Number of Reads")
 box()
 
 
-duplication_rate_difference <-  duplication_rate$non.unique / (duplication_rate$unique + duplication_rate$non.unique)
-max_y_difference = max(duplication_rate_difference)
+pcr_artifacts_percentage <-  duplication_rate$non_unique / (duplication_rate$unique + duplication_rate$non_unique)
+pcr_artifacts_absolute <-  duplication_rate$non_unique
+
+
+max_y_difference = max(pcr_artifacts_percentage)
 par(new=TRUE)
-plot(duplication_rate$rate[c(1:len)],duplication_rate_difference[c(1:len)], type="l", lty=line_types[3], col=plot_colors[3],ann=F, axes=F)
+plot(duplication_rate$rate[c(1:len)],pcr_artifacts_percentage[c(1:len)], type="l", lty=line_types[3], col=plot_colors[3],ann=F, axes=F)
 mtext("Percentage PCR artifacts",side=4,col="black",line=4) 
 
 #aty_diff <- seq(0,1,by=0.2)
@@ -62,7 +66,7 @@ title(main="Reads per Duplication Rate", col.main="black", font.main=4)
 # Label the x and y axes with dark green text
 
 
-legend("topright", c("non unique","unique", "PCR artifacts"), cex=0.8, col=plot_colors, lty=line_types)
+legend("topright", c("total duplicates","unique duplicates", "PCR artifacts rate"), cex=0.8, col=plot_colors, lty=line_types)
    
 # Turn off device driver (to flush output to png)
 #dev.off()

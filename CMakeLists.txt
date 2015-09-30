@@ -52,7 +52,7 @@ add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
 add_subdirectory(ting)
 add_subdirectory(MappingAnalyzer)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../seqan/apps/seqan_flexbar ${CMAKE_CURRENT_BINARY_DIR}/flexbar)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../seqan/apps/flexbar++ ${CMAKE_CURRENT_BINARY_DIR}/flexbar++)
 
 if(LINUX_STATIC)
 	SET_TARGET_PROPERTIES(nexus-pre PROPERTIES LINK_SEARCH_END_STATIC 1)
