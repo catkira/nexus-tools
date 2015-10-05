@@ -12,6 +12,6 @@ cp -f bin/flexbar++ ../nexus-tools/bin/
 cp -f bin/nexus-pre ../nexus-tools/bin/
 cp -f bin/MappingAnalyzer ../nexus-tools/bin/
 
-cp -f bin/seqan_flexbar ~/Q/bin
+cp -f bin/flexbar++ ~/Q/bin
 cp -f bin/nexus-pre ~/Q/bin
 
