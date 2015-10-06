@@ -26,9 +26,9 @@ flexbar_er = "0.2";
 flexbar_ol = "4";
 flexbar_fm = "4";
 flexbar_ml = "4";
-flexbar_lo = "4";
+flexbar_oh = "4";
 flexbar_times = "5";
-flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best.fa";
+flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best_short.fa";
 flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
 
@@ -87,9 +87,9 @@ bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
 
 if results.exo:
- args = ("flexbar++", results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-lo", flexbar_lo, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = ("flexbar++", results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 else:
- args = ("flexbar++", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-lo", flexbar_lo, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = ("flexbar++", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
  #args = ("flexbar++", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
