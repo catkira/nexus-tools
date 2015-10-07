@@ -24,8 +24,8 @@ def indexBamFile(filename):
 
 flexbar_er = "0.2";
 flexbar_ol = "4";
-flexbar_fm = "4";
-flexbar_ml = "4";
+flexbar_fm = "13";
+flexbar_ml = "13";
 flexbar_oh = "4";
 flexbar_times = "5";
 flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best_short.fa";

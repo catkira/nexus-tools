@@ -1,16 +1,8 @@
->adapter1.1
-
 >adapter1.2:3':
 AGATCGGAAGAGCACACGTCTGGATCCACGACGCTCTTCC
->adapter1.1
-
 >adapter1.2:3':
 GATCCACGACGCTCTTCC
->adapter1.1
-
 >adapter1.2:3':
 AGATCGGAAG
->adapter1.1
-
 >adapter1.2:5':
 CTTCCGATCT
