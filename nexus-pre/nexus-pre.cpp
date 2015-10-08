@@ -432,14 +432,6 @@ int main(int argc, char const * argv[])
     duplicationRateUnique.clear();
     duplicationRate.clear();
 
-    const auto numChr = seqan::length(contigNames(context(bamFileIn)));
-    const unsigned int maxDistance = 1000;
-    std::vector<std::vector<unsigned int>> crossCorrelation(maxDistance, std::vector<unsigned int>(numChr));
-    calculateQFragLengthDistribution(occurenceMap, crossCorrelation, bamFileIn);
-    saveQFragLengthDistribution(getFilePrefix(argv[1]) + "_QFragLengthDistribution.txt", crossCorrelation, bamFileIn);
-    estimateFragmentLength(crossCorrelation, stats.estimatedFragmentLength);
-    std::cout << "estimated fragment length: " << stats.estimatedFragmentLength << std::endl;
-
     printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
 #ifdef _MSV_VER
     fs3.open(getFilePrefix(argv[1]) + "_statistics.txt", std::fstream::out, _SH_DENYNO);

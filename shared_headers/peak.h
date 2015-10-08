@@ -322,53 +322,6 @@ void saveQFragLengthDistribution(const std::string& filename, TCrossCorrelation 
     }
     fs.close();
 }
-
-template <typename TEdgeDistribution, typename TLengthDistribution, typename TFilter>
-void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, const TFilter& filter, seqan::BamFileIn& bamFileIn)
-{
-    const auto maxDistance = lengthDistribution.size();
-    seqan::BedRecord<seqan::Bed4> bedRecord;
-                // I think this -1 is not neccessary, but its here to reproduce the data from the CHipNexus paper exactly
-    //SaveBed<seqan::BedRecord<seqan::Bed4>> saveBed("P:\\length27Frags");
-    for (auto it = edgeDistribution.begin(); it != edgeDistribution.end(); ++it)
-    {
-        auto tempIt = std::next(it, 1);
-        int distance = 0;
-        if (getKey(*it).isReverseStrand())
-            continue;
-        if (!filter.empty() && filter.find(getKey(*it).getRID()) != filter.end())
-            continue;
-        bedRecord.rID = getKey(*it).getRID();
-        bedRecord.ref = contigNames(bamFileIn.context)[bedRecord.rID];
-        while (calculate5EndDistance(getKey(*it), getKey(*tempIt), distance))
-        {
-            if (distance >= static_cast<int>(maxDistance))
-                break;
-            if (getKey(*tempIt).isReverseStrand())
-            {
-                lengthDistribution[distance][getKey(*it).getRID()] += getUniqueFrequency(*it) * getUniqueFrequency(*tempIt);
-                //if (distance == 27)
-                //{
-                //    bedRecord.beginPos = getKey(*it).get5EndPosition();
-                //    bedRecord.endPos = getKey(*tempIt).get5EndPosition();
-                //    bedRecord.name = std::to_string(getUniqueFrequency(*it) * getUniqueFrequency(*tempIt)); // abuse name as val parameter in BedGraph
-                //    saveBed.write(bedRecord);
-                //}
-
-                //lengthDistribution[distance] ++;
-            }
-            tempIt++;
-        }
-    }
-}
-
-template <typename TEdgeDistribution, typename TLengthDistribution>
-void calculateQFragLengthDistribution(const TEdgeDistribution& edgeDistribution, TLengthDistribution& lengthDistribution, seqan::BamFileIn& bamFileIn)
-{
-    std::set<unsigned int> emptySet;
-    calculateQFragLengthDistribution(edgeDistribution, lengthDistribution, emptySet, bamFileIn);
-}
-
 template <typename TEdgeDistribution, typename TCalcScore, typename TScoreDistribution>
 void calculateScoreDistribution2(const TEdgeDistribution& edgeDistribution, TCalcScore calcScore, const int maxDistance, TScoreDistribution& scoreDistribution)
 {
