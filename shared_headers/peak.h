@@ -56,6 +56,14 @@ struct PeakCandidate
     {
         score = 0;
     }
+    unsigned int getRefGenomePosition() const
+    {
+        return getKey(*centerIt).get5EndPosition();
+    }
+    void getDescription(std::string& description) const
+    {
+        description = "position=" + std::to_string(getKey(*centerIt).get5EndPosition());
+    }
     Range<TEdgeDistribution> range;
     typename TEdgeDistribution::const_iterator centerIt;
     double score;
