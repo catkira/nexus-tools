@@ -9,8 +9,9 @@ import platform
 #print 'Number of arguments:', len(sys.argv), 'arguments.'
 #print 'Argument List:', str(sys.argv)
 
-def indexBamFile(filename):
-	args = ("python", os.path.dirname(os.path.realpath(__file__)) + "/bam_indexer.py", filename)
+def indexBamFile(filename, script_path):
+	args = ("python", script_path + "/bam_indexer.py", filename)
+	print args
 	print "Creating indexed bam file..."
 	popen = subprocess.Popen(args, stdout=subprocess.PIPE)
 	popen.wait()
@@ -28,6 +29,7 @@ flexbar_fm = "13";
 flexbar_ml = "13";
 flexbar_oh = "4";
 flexbar_times = "5";
+script_path = os.path.dirname(os.path.realpath(__file__))
 flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best_short.fa";
 flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
@@ -85,11 +87,14 @@ else:
  bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
 bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
-
+flexbar_path = script_path+"/../bin/flexbar++"
+if(platform.system() == "Windows"):
+	flexbar_path += ".exe"
+	
 if results.exo:
- args = ("flexbar++", results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = (flexbar_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 else:
- args = ("flexbar++", results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = (flexbar_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
  #args = ("flexbar++", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
@@ -146,10 +151,15 @@ if results.random_split == True:
 	nexusOutputFilenameSplit1 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split1.bam"
 	nexusOutputFilenameSplit2 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
 
+nexus_pre_path = script_path+"/../bin/nexus-pre"
+if(platform.system() == "Windows"):
+	nexus_pre_path += ".exe"
+	
+	
 if (os.path.isfile(nexusOutputFilename) == False or 
 (results.random_split == True and (os.path.isfile(nexusOutputFilenameSplit1) == False or os.path.isfile(nexusOutputFilenameSplit2) == False)) or
 results.overwrite == True):
-    args = ("nexus-pre", bowtieOutputFilename,  "-fc", results.filter_chromosomes)
+    args = (nexus_pre_path, bowtieOutputFilename,  "-fc", results.filter_chromosomes)
     if results.random_split == True:
 		args += ("-rs",)
     print "Filtering post-mapping barcodes..."
@@ -162,10 +172,10 @@ results.overwrite == True):
         print "error"
         sys.exit()
 
-indexBamFile(nexusOutputFilename)			
+indexBamFile(nexusOutputFilename, script_path)			
 if results.random_split == True:
-	indexBamFile(nexusOutputFilenameSplit2)		
-	indexBamFile(nexusOutputFilenameSplit1)		
+	indexBamFile(nexusOutputFilenameSplit2, script_path)		
+	indexBamFile(nexusOutputFilenameSplit1, script_path)		
 	
 #cleanup
 if results.clean:
