@@ -56,14 +56,6 @@ struct PeakCandidate
     {
         score = 0;
     }
-    unsigned int getRefGenomePosition() const
-    {
-        return getKey(*centerIt).get5EndPosition();
-    }
-    void getDescription(std::string& description) const
-    {
-        description = "position=" + std::to_string(getKey(*centerIt).get5EndPosition());
-    }
     Range<TEdgeDistribution> range;
     typename TEdgeDistribution::const_iterator centerIt;
     double score;
@@ -305,31 +297,6 @@ const auto calculateChromosomeFilter(const std::string& filterString, const TChr
     return chromosomeFilter;
 }
 
-template <typename TCrossCorrelation>
-void saveQFragLengthDistribution(const std::string& filename, TCrossCorrelation crossCorrelation, seqan::BamFileIn& bamFileIn)
-{
-    std::fstream fs;
-#ifdef _MSC_VER
-    fs.open(filename, std::fstream::out, _SH_DENYNO);
-#else
-    fs.open(filename, std::fstream::out);
-#endif
-
-    for (auto chrName : contigNames(context(bamFileIn)))
-        fs << chrName << "\t";
-    fs << "totalSum" << std::endl;
-    for (const auto element : crossCorrelation)
-    {
-        unsigned int sum = 0;
-        for (const auto num : element)
-        {
-            fs << num << "\t";
-            sum += num;
-        }
-        fs << sum << std::endl;
-    }
-    fs.close();
-}
 template <typename TEdgeDistribution, typename TCalcScore, typename TScoreDistribution>
 void calculateScoreDistribution2(const TEdgeDistribution& edgeDistribution, TCalcScore calcScore, const int maxDistance, TScoreDistribution& scoreDistribution)
 {

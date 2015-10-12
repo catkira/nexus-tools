@@ -90,19 +90,11 @@ seqan::ArgumentParser buildParser(void)
     setMinValue(scoreLimitOpt, "0.0001");
     addOption(parser, scoreLimitOpt);
 
-    seqan::ArgParseOption rgOpt = seqan::ArgParseOption(
-        "rg", "reference genome", "If a reference genome is specified, the sequence around peaks will be written to a fasta file",
-    seqan::ArgParseOption::OUTPUT_FILE, "OUTPUT");
-    setValidValues(rgOpt, seqan::SeqFileOut::getFileExtensions());
-    addOption(parser, rgOpt);
-
-    seqan::ArgParseOption pswOpt = seqan::ArgParseOption(
-        "psw", "peak sequence width", "Number of bases around a peak that will be written to a fasta file. This option needs -rg",
-        seqan::ArgParseOption::INTEGER, "VALUE");
-    setDefaultValue(pswOpt, 2.0);
-    setMinValue(pswOpt, "1");
-    setMaxValue(pswOpt, "1000");
-    addOption(parser, pswOpt);
+    seqan::ArgParseOption mfOpt = seqan::ArgParseOption(
+        "pr", "bed file", "File containing peak ranges in which reads will be counted",
+    seqan::ArgParseOption::INPUT_FILE, "INPUT");
+    setValidValues(mfOpt, "*.bed");
+    addOption(parser, mfOpt);
 
     return parser;
 }
@@ -162,25 +154,6 @@ bool loadReferenceGenome(const std::string& filename, TSequence& referenceGenome
         seqan::append(referenceGenome, std::move(sequence));
     }
     seqan::close(seqFile);
-    return true;
-}
-
-template <typename TSequence, typename TPeaks>
-bool writeCandidateSequencesToFile(const TSequence& referenceGenome, const TPeaks& peaks, const unsigned int& width, const std::string& filename)
-{
-    seqan::SeqFileOut fileOut(std::string(filename + ".fasta").c_str());
-    std::string description;
-    for (const auto& peak : peaks)
-    {
-        const auto position = peak.getRefGenomePosition();
-        peak.getDescription(description);
-        unsigned int start = std::max<int>(0,position - width);
-        unsigned int end = std::min<int>(length(referenceGenome),position+width);
-
-        const TSequence& sequence = seqan::infix(referenceGenome, start, end);
-        seqan::writeRecord(fileOut, description, sequence);
-    }
-    seqan::close(fileOut);
     return true;
 }
 
@@ -283,23 +256,6 @@ int main(int argc, char const * argv[])
     SaveBed<seqan::BedRecord<seqan::Bed4>> saveBedCandidateScores(outFilename);
     saveBedCandidateScores.writeHeader("track type=bedGraph name=\"BedGraph Format\" description=\"BedGraph format\" visibility=full color=200,100,0 altColor=0,100,200 priority=20\n");
     forwardCandidatesToBed<OccurenceMap, SaveBed<seqan::BedRecord<seqan::Bed4>>, decltype(bamFileIn.context)>(peakCandidatesVector, saveBedCandidateScores, bamFileIn.context);
-
-    if (seqan::isSet(parser, "rg"))
-    {
-        seqan::Dna5String referenceGenome;
-        std::string referenceGenomeFilename;
-        seqan::CharString _referenceGenomeFilename;
-        getOptionValue(_referenceGenomeFilename, parser, "rg");
-        referenceGenomeFilename = seqan::toCString(_referenceGenomeFilename);
-        unsigned int width = 1;
-        seqan::getOptionValue(width, parser, "psw");
-        
-        std::cout << "loading reference genome...";
-        loadReferenceGenome(referenceGenomeFilename, referenceGenome);
-        std::cout << "\nwriting peak sequences...";
-        writeCandidateSequencesToFile(referenceGenome, peakCandidatesVector, width, outFilename);
-        std::cout << std::endl;
-    }
 
     auto filter = [scoreLimit](const PeakCandidate<OccurenceMap>& peakCandidate)
         {return peakCandidate.score > 10*scoreLimit ? true : false;};
