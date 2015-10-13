@@ -21,7 +21,6 @@ struct Statistics
     unsigned readsAfterFiltering = 0;
     unsigned int couldNotMap = 0;
     unsigned int couldNotMapUniquely = 0;
-    unsigned int estimatedFragmentLength = 0;
 };
 
 template <typename TStream>
@@ -37,7 +36,6 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool cluste
         stream << "After barcode filtering" << "\t" << stats.totalMappedReads - stats.removedReads << "\t" << " (-" << stats.removedReads << ")" << std::endl;
         stream << "PCR duplication rate" << "\t" << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
         stream << "Total duplet reads" << "\t" << stats.totalSamePositionReads << std::endl;
-        stream << "Estimated fragment Length" << "\t" << stats.estimatedFragmentLength << std::endl;
         if (clusterFiltering)
             stream << "After cluster filtering" << "\t" << stats.readsAfterFiltering << "\t" << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
     }
@@ -51,7 +49,6 @@ void printStatistics(TStream &stream, const Statistics &stats, const bool cluste
         stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
         stream << "PCR duplication rate                 : " << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
         stream << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
-        stream << "Estimated fragment length            : " << stats.estimatedFragmentLength << std::endl;
         if (clusterFiltering)
             stream << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
     }
