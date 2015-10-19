@@ -27,7 +27,6 @@ set (CMAKE_INCLUDE_PATH
     ${CMAKE_CURRENT_SOURCE_DIR}/../seqan/include
     ${CMAKE_INCLUDE_PATH})
 set (CMAKE_MODULE_PATH
-    ${CMAKE_CURRENT_SOURCE_DIR}/../seqan/util/cmake/FindTBB
     ${CMAKE_CURRENT_SOURCE_DIR}/../seqan/util/cmake
     ${CMAKE_MODULE_PATH})
 include (SeqAnContribs)
@@ -51,14 +50,12 @@ add_definitions (-D_MULTITHREADED_IO)
 
 add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
-add_subdirectory(ting)
 add_subdirectory(MappingAnalyzer)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../seqan/apps/flexbar++ ${CMAKE_CURRENT_BINARY_DIR}/flexbar++)
 
 if(LINUX_STATIC)
 	SET_TARGET_PROPERTIES(nexus-pre PROPERTIES LINK_SEARCH_END_STATIC 1)
 	SET_TARGET_PROPERTIES(test-app PROPERTIES LINK_SEARCH_END_STATIC 1)
-	SET_TARGET_PROPERTIES(ting PROPERTIES LINK_SEARCH_END_STATIC 1)
 	SET_TARGET_PROPERTIES(MappingAnalyzer PROPERTIES LINK_SEARCH_END_STATIC 1)
 	SET_TARGET_PROPERTIES(flexlib PROPERTIES LINK_SEARCH_END_STATIC 1)
 	SET_TARGET_PROPERTIES(flexbar++ PROPERTIES LINK_SEARCH_END_STATIC 1)
