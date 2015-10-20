@@ -1,6 +1,4 @@
 // ==========================================================================
-//                                SeqAn-Flexbar
-// ==========================================================================
 // Copyright (c) 2006-2015, Knut Reinert, FU Berlin
 // All rights reserved.
 //
@@ -47,5 +45,5 @@ int main(int argc, char const ** argv)
 {
     // Run quality control program.
     flexiProgram = FLEX_PROG;
-    return flexbarMain(argc, argv);
+    return flexcatMain(argc, argv);
 }
