@@ -208,8 +208,8 @@ public:
 
     void signal(int count = 1)
     {
-        int oldCount = m_count.fetch_add(count, std::memory_order_release);
-        int toRelease = -oldCount < count ? -oldCount : count;
+        const int oldCount = m_count.fetch_add(count, std::memory_order_release);
+        const int toRelease = -oldCount < count ? -oldCount : count;
         if (toRelease > 0)
         {
             m_sema.signal(toRelease);

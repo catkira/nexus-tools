@@ -57,7 +57,7 @@ public:
                 noEmptySlot = true;
                 for (auto& readSet : _tlsReadSets) 
                 {
-                    if (readSet.load() == nullptr)
+                    if (readSet.load(std::memory_order_relaxed) == nullptr)
                     {
                         noEmptySlot = false;
                         currentReadSet = std::make_unique<TReadSet>(_programParams.records);
@@ -70,16 +70,17 @@ public:
                         }
                         loadMultiplex(*currentReadSet, _programParams.records, _inputFileStreams.fileStreamMultiplex);
                         _numReads += currentReadSet->size();
-                        if (currentReadSet->empty() || _numReads >= _programParams.firstReads)    // no more reads available or maximum read number reached -> dont do further reads
-                            _eof = true;
-                        readSet.store(currentReadSet.release());
+                        const bool empty = currentReadSet->empty();
+                        readSet.store(currentReadSet.release(), std::memory_order_relaxed);
+                        if (empty || _numReads >= _programParams.firstReads)    // no more reads available or maximum read number reached -> dont do further reads
+                            _eof.store(true, std::memory_order_release);
 
-                        if (useSemaphore && _eof)  // wakeup all potentially waiting threads so that they can be joined
+                        if (useSemaphore && _eof.load(std::memory_order_relaxed))  // wakeup all potentially waiting threads so that they can be joined
                             readAvailableSemaphore.signal(_programParams.num_threads);
                         else if (useSemaphore)
                             readAvailableSemaphore.signal();
                     }
-                    if (_eof)
+                    if (_eof.load(std::memory_order_relaxed))
                         return;
                 }
                 if (noEmptySlot)  // no empty slow was found, wait a bit
@@ -94,14 +95,14 @@ public:
     }
     inline bool eof() const noexcept
     {
-        return _eof;
+        return _eof.load(std::memory_order_acquire);
     }
     bool idle() noexcept
     {
-        if (!_eof)
+        if (!_eof.load(std::memory_order_acquire))
             return false;
         for (auto& readSet : _tlsReadSets)
-            if (readSet.load())
+            if (readSet.load(std::memory_order_relaxed))
                 return false;
         return true;
     }
@@ -116,12 +117,12 @@ public:
         TReadSet* temp = nullptr;
         while (true)
         {
-            bool eof = _eof;
+            bool eof = _eof.load(std::memory_order_acquire);
             for (auto& readSet : _tlsReadSets)
             {
-                if ((temp = readSet.load()) != nullptr)
+                if ((temp = readSet.load(std::memory_order_relaxed)) != nullptr)
                 {
-                    if (readSet.compare_exchange_strong(temp, nullptr))
+                    if (readSet.compare_exchange_strong(temp, nullptr, std::memory_order_relaxed))
                     {
                         reads.reset(temp);
                         if (useSemaphore)

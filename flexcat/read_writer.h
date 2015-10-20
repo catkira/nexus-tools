@@ -185,10 +185,10 @@ public:
                 bool nothingToDo = true;
                 for (auto& readSet : _tlsReadSets)
                 {
-                    if (readSet.load() != nullptr)
+                    if (readSet.load(std::memory_order_relaxed) != nullptr)
                     {
-                        currentWriteItem.reset(readSet.load());
-                        readSet.store(nullptr); // make the slot free again
+                        currentWriteItem.reset(readSet.load(std::memory_order_relaxed));
+                        readSet.store(nullptr, std::memory_order_relaxed); // make the slot free again
                         if (useSemaphore)
                             slotEmptySemaphore.signal();
                         nothingToDo = false;
@@ -233,10 +233,10 @@ public:
         {
             for (auto& reads : _tlsReadSets)
             {
-                if (reads.load() == nullptr)
+                if (reads.load(std::memory_order_relaxed) == nullptr)
                 {
                     TWriteItem* temp = nullptr;
-                    if (reads.compare_exchange_strong(temp, writeItem))
+                    if (reads.compare_exchange_strong(temp, writeItem, std::memory_order_relaxed))
                     {
                         if (useSemaphore)
                             readAvailableSemaphore.signal();
@@ -253,7 +253,7 @@ public:
     }
     void getStats(std::tuple_element_t<2, TWriteItem>& stats)
     {
-        _run = false;
+        _run.store(false);
         if (useSemaphore)
             readAvailableSemaphore.signal();
         if (_thread.joinable())
@@ -263,7 +263,7 @@ public:
     bool idle() noexcept
     {
         for (auto& readSet : _tlsReadSets)
-            if (readSet.load() != nullptr)
+            if (readSet.load(std::memory_order_relaxed) != nullptr)
                 return false;
         return true;
     }
