@@ -33,7 +33,7 @@
 // ==========================================================================
 
 #include <algorithm>
-#include "flexbar++.h"
+#include "flexcat.h"
 
 #define SEQAN_PROFILE
 #ifdef SEQAN_ENABLE_DEBUG

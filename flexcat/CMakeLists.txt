@@ -1,14 +1,6 @@
-# ===========================================================================
-#                  SeqAn - The Library for Sequence Analysis
-# ===========================================================================
-# File: /apps/flexbar++/CMakeLists.txt
-#
-# CMakeLists.txt file for Flexbar++.
-# ===========================================================================
-
 cmake_minimum_required (VERSION 2.8.2)
-project (seqan_apps_flexbar++)
-message (STATUS "Configuring apps/flexbar++")
+project (Flexcat)
+message (STATUS "Configuring flexcat")
 
 set (SEQAN_APP_VERSION "1.0.0")
 add_definitions ("-D_MULTITHREADED_IO")
@@ -19,18 +11,18 @@ add_definitions ("-D_MULTITHREADED_IO")
 
 find_package(CXX11 REQUIRED)
 
-# Disable flexbar if no CXX11 available.
+# Disable flexcat if no CXX11 available.
 if (NOT CXX11_FOUND)
-    message (STATUS "  C++11 compiler required to build flexbar++")
+    message (STATUS "  C++11 compiler required to build flexcat")
     return ()
 endif (NOT CXX11_FOUND)
 
 
 find_package(CXX14 REQUIRED)
 
-# Disable flexbar if no CXX11 available.
+# Disable flexcat if no CXX11 available.
 if (NOT CXX14_FOUND)
-    message (STATUS "  C++14 compiler required to build flexbar++")
+    message (STATUS "  C++14 compiler required to build flexcat")
     return ()
 endif (NOT CXX14_FOUND)
 
@@ -40,7 +32,7 @@ find_package (SeqAn REQUIRED)
 
 find_package(Boost 1.36.0)
 if(NOT Boost_FOUND)
-    message (STATUS "  flexbar cannot be built without Boost.")
+    message (STATUS "  flexcat cannot be built without Boost.")
     return ()
 endif()
 
@@ -81,14 +73,14 @@ add_library (flexlib
              general_processing.h
              helper_functions.h
 			 general_stats.h
-             flexbar++.h
+             flexcat.h
              flexlib.cpp)
 target_link_libraries (flexlib ${SEQAN_LIBRARIES})
 
 set (KNIME_FLEX_NODES sflexQC sflexAR sflexDMulti sflexFilter)
 
-foreach (TARGET ${KNIME_FLEX_NODES} flexbar++)
-    add_executable (${TARGET} flexbar++.cpp)
+foreach (TARGET ${KNIME_FLEX_NODES} flexcat)
+    add_executable (${TARGET} flexcat.cpp)
     target_link_libraries (${TARGET} flexlib ${SEQAN_LIBRARIES})
 endforeach ()
 
@@ -110,15 +102,15 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS} $
 
 # Set variables for installing, depending on the selected build type.
 if (NOT SEQAN_PREFIX_SHARE_DOC)
-  seqan_setup_install_vars (flexbar++)
+  seqan_setup_install_vars (flexcat)
 endif (NOT SEQAN_PREFIX_SHARE_DOC)
 
-# Install flexbar++ in ${PREFIX}/bin directory
-install (TARGETS flexbar++
+# Install flexcat in ${PREFIX}/bin directory
+install (TARGETS flexcat
          DESTINATION bin)
 
 # Install non-binary files for the package to "." for app builds and
-# ${PREFIX}/share/doc/flexbar++ for SeqAn release builds.
+# ${PREFIX}/share/doc/flexcat for SeqAn release builds.
 install (FILES LICENSE
                README
          DESTINATION ${SEQAN_PREFIX_SHARE_DOC})
@@ -127,25 +119,25 @@ install (FILES LICENSE
 # App Test
 # ----------------------------------------------------------------------------
 
-seqan_add_app_test (flexbar++)
+seqan_add_app_test (flexcat)
 
 # ----------------------------------------------------------------------------
 # Setup Common Tool Description for Generic Workflow Nodes
 # ----------------------------------------------------------------------------
 
-# Include executable seqanFlexbar in CTD structure.
+# Include executable flexcat in CTD structure.
 set (SEQAN_CTD_EXECUTABLES ${SEQAN_CTD_EXECUTABLES} ${KNIME_FLEX_NODES} CACHE INTERNAL "")
 
 # ----------------------------------------------------------------------------
 # CPack Install
 # ----------------------------------------------------------------------------
 
-if (SEQAN_BUILD_SYSTEM STREQUAL "APP:flexbar++")
-  set (CPACK_PACKAGE_NAME "flexbar++")
-  set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "Flexbar++ - Flexible barcode and adapter removal for sequencing platforms in SeqAn")
+if (SEQAN_BUILD_SYSTEM STREQUAL "APP:flexcat")
+  set (CPACK_PACKAGE_NAME "flexcat")
+  set (CPACK_PACKAGE_DESCRIPTION_SUMMARY "Flexcat - Flexible barcode and adapter removal for NGS")
   set (CPACK_DEBIAN_PACKAGE_MAINTAINER "Benjamin Menkuec <benjamin@menkuec.de>")
   set (CPACK_PACKAGE_VENDOR "SeqAn Team, FU Berlin")
 
-  seqan_configure_cpack_app (flexbar++ "flexbar++")
-endif (SEQAN_BUILD_SYSTEM STREQUAL "APP:flexbar++")
+  seqan_configure_cpack_app (flexcat "flexcat")
+endif (SEQAN_BUILD_SYSTEM STREQUAL "APP:flexcat")
 

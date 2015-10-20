@@ -37,7 +37,7 @@
 
 // P:\data\fastq\SRR1175698.fastq -tnum 1 -fr 10000 -r 1000 -app -times 5 -er 0.2 -ol 4 -fm 4 -ml 4 -t -tt -tl 5 -ss -b P:\git\chip-nexus\data\barcodes.fa -a P:\git\nexus-tools\data\adapters_best.fa -o P:\out.fastq
 // P:\data\fastq\SRR1175698.fastq -tt -ss -b P:\git\nexus-tools\data\barcodes.fa - tl 5 - o P : \data\first1000000demultiplexed.fastq - fr 1000000 -tnum 7
-#include "flexbar++.h"
+#include "flexcat.h"
 
 #ifndef FLEX_PROG
 #define FLEX_PROG ALL_STEPS
