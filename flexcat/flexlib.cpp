@@ -1294,8 +1294,6 @@ private:
 
 };
 
-//#undef _MULTITHREADED_IO
-
 // END FUNCTION DEFINITIONS ---------------------------------------------
 template<template <typename> class TRead, typename TSeq, typename TEsaFinder, typename TStats>
 int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& inputFileStreams, const DemultiplexingParams& demultiplexingParams, const ProcessingParams& processingParams, const AdapterTrimmingParams& adapterTrimmingParams,
@@ -1340,7 +1338,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         if (numReadsRead == 0)
             break;
 
-        auto res = readProcessor.doProcessing(readSet.release());
+        auto res = readProcessor.doProcessing(std::move(readSet));
         generalStats += std::get<2>(*res);
 
         t1 = std::chrono::steady_clock::now();

@@ -46,8 +46,6 @@ include (SeqAnCtdSetup)
 add_definitions (-DSEQAN_REVISION="${SEQAN_REVISION}")
 add_definitions (-DSEQAN_DATE="${SEQAN_DATE}")
 
-add_definitions (-D_MULTITHREADED_IO)
-
 add_subdirectory(nexus-pre)
 add_subdirectory(test-app)
 add_subdirectory(MappingAnalyzer)
