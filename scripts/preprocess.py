@@ -23,15 +23,15 @@ def indexBamFile(filename, script_path):
 		sys.exit()
 	return;
 
-flexbar_er = "0.2";
-flexbar_ol = "4";
-flexbar_fm = "13";
-flexbar_ml = "13";
-flexbar_oh = "4";
-flexbar_times = "5";
+flexcat_er = "0.2";
+flexcat_ol = "4";
+flexcat_fm = "13";
+flexcat_ml = "13";
+flexcat_oh = "4";
+flexcat_times = "5";
 script_path = os.path.dirname(os.path.realpath(__file__))
-flexbarAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best_short.fa";
-flexbarBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
+flexcatAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best_short.fa";
+flexcatBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
@@ -79,7 +79,7 @@ if results.output_dir is not None:
 else:
     outputDir = inFilenamePrefixWithoutPath
 #output has to be fastq format, because bowtie does not support fastq.gz
-flexbarOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
+flexcatOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
 
 if results.exo:
  bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
@@ -87,15 +87,15 @@ else:
  bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
 bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
-flexbar_path = script_path+"/../bin/flexbar++"
+flexcat_path = script_path+"/../bin/flexcat"
 if(platform.system() == "Windows"):
-	flexbar_path += ".exe"
+	flexcat_path += ".exe"
 	
 if results.exo:
- args = (flexbar_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = (flexcat_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexcat_times, "-er",flexcat_er, "-ol", flexcat_ol, "-oh", flexcat_oh, "-fm", flexcat_fm, "-ml", flexcat_ml, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
 else:
- args = (flexbar_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexbar_times, "-er",flexbar_er, "-ol", flexbar_ol, "-oh", flexbar_oh, "-fm", flexbar_fm, "-ml", flexbar_ml, "-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
- #args = ("flexbar++", results.input_file, "-tl", "5","-b", flexbarBarcodeFilename, "-a", flexbarAdapterFilename,"-o", flexbarOutputFilename)
+ args = (flexcat_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexcat_times, "-er",flexcat_er, "-ol", flexcat_ol, "-oh", flexcat_oh, "-fm", flexcat_fm, "-ml", flexcat_ml, "-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
+ #args = ("flexcat", results.input_file, "-tl", "5","-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
 if (os.path.isfile(bowtieInputFilename) == False or results.overwrite == True):
@@ -109,7 +109,7 @@ if (os.path.isfile(bowtieInputFilename) == False or results.overwrite == True):
      print "error"
      sys.exit()
     if results.verbose == True:
-        print flexbarOutputFilename + " created"
+        print flexcatOutputFilename + " created"
 
 head, tail = os.path.split(genomeFilename)
 genomeIndex, file_extension = os.path.splitext(tail)
@@ -183,7 +183,7 @@ if results.clean:
     os.remove(bowtieOutputFilename)
     os.remove(nexusOutputFilename)
     if results.exo:
-        os.remove(flexbarOutputFilename)
+        os.remove(flexcatOutputFilename)
     else:
         os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension)
         os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_unidentified" + inFileExtension)
