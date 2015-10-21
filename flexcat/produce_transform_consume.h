@@ -188,13 +188,13 @@ struct Reduce
 public:
     using item_type = TItem;
 private:
+    TSink& _sink;
     std::vector<std::atomic<TItem*>> _tlsItems;
     std::thread _thread;
     std::atomic_bool _run;
     unsigned int _sleepMS;
     LightweightSemaphore itemAvailableSemaphore;
     LightweightSemaphore slotEmptySemaphore;
-    TSink& _sink;
 
 public:
     Reduce(TSink& sink, const unsigned int numThreads, unsigned int sleepMS)
