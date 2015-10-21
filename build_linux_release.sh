@@ -2,7 +2,7 @@ cd ..
 mkdir nexus-tools_build
 cd nexus-tools_build
 export CXX=/usr/bin/g++-5
-cmake -DCMAKE_BUILD_TYPE=Release ../nexus-tools
+cmake -DLINUX_STATIC:BOOL=OFF -DCMAKE_BUILD_TYPE=Release ../nexus-tools
 make flexcat
 make nexus-pre
 make MappingAnalyzer

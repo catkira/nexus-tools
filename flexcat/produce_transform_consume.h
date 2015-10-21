@@ -154,7 +154,7 @@ public:
         {
             _thread = std::thread([this]()
             {
-                std::unique_ptr<TProducer::item_type> item;
+                std::unique_ptr<typename TProducer::item_type> item;
                 while (_producer.getItem(item))
                 {
                     _consumer.pushItem(_transformer.transform(std::move(item)));
