@@ -197,7 +197,7 @@ namespace ptc
 
 
     template<typename TSink, typename TItem, typename TSemaphore>
-    struct Reduce
+    struct Consume
     {
     public:
         using item_type = TItem;
@@ -211,13 +211,13 @@ namespace ptc
         TSemaphore slotEmptySemaphore;
 
     public:
-        Reduce(TSink& sink, unsigned int sleepMS = defaultSleepMS)
+        Consume(TSink& sink, unsigned int sleepMS = defaultSleepMS)
             : _sink(sink), _run(false), _sleepMS(sleepMS)
         {
             for (auto& item : _tlsItems)
                 item.store(nullptr);  // fill initialization does not work for atomics
         }
-        ~Reduce()
+        ~Consume()
         {
             _run = false;
             if (_thread.joinable())

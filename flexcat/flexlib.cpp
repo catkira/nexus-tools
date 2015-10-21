@@ -1284,7 +1284,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
     using TReadWriter = ReadWriter<TRead, TSeq, TWriteItem, OutputStreams, ProgramParams>;
     TReadWriter readWriter(outputStreams, programParams);
-    using Consumer = ptc::Reduce<TReadWriter, TWriteItem, LightweightSemaphore>;
+    using Consumer = ptc::Consume<TReadWriter, TWriteItem, LightweightSemaphore>;
     Consumer consumer(readWriter);
     
     auto ptc_unit = ptc::make_ptc_unit(producer, transformer, consumer, programParams.num_threads);

@@ -1,4 +1,5 @@
 cd ..
+rm -rf nexus-tools_build
 mkdir nexus-tools_build
 cd nexus-tools_build
 export CXX=/usr/bin/g++-5
