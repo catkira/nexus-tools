@@ -67,6 +67,7 @@ foreach (TEST demultiplex trimming adapter general_processing)
 endforeach ()
 
 add_library (flexlib
+			 produce_transform_consume.h
              read.h
 			 read_reader.h
 			 read_writer.h
