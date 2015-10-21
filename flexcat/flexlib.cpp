@@ -1309,7 +1309,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         if (numReadsRead == 0)
             break;
 
-        auto res = transformer.transform(std::move(readSet));
+        auto res = transformer(std::move(readSet));
         generalStats += std::get<2>(*res);
 
         t1 = std::chrono::steady_clock::now();
