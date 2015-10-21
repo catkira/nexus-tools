@@ -8,7 +8,7 @@ if (LINUX_STATIC)
 else()
     add_definitions ("-D_MULTITHREADED_IO")
     message (STATUS "  multithreading enabled")
-endif(Multithreading)
+endif(LINUX_STATIC)
 
 # ----------------------------------------------------------------------------
 # Dependencies
