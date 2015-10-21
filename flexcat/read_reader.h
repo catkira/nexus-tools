@@ -5,11 +5,6 @@
 
 #pragma once
 
-#include <string>
-#include <future>
-
-#include "semaphore.h"
-
 template<template<typename> class TRead, typename TSeq, typename TProgramParams, typename TInputFileStreams>
 struct ReadReader
 {
@@ -23,7 +18,7 @@ private:
 public:
     ReadReader(TInputFileStreams& inputFileStreams, const TProgramParams& programParams)
         : _inputFileStreams(inputFileStreams), _programParams(programParams), _numReads(0) {};
-    bool give(std::unique_ptr<std::vector<TRead<TSeq>>>& item)
+    bool operator()(std::unique_ptr<std::vector<TRead<TSeq>>>& item)
     {
         try {
             readReads(*item, _programParams.records, _inputFileStreams);

@@ -64,6 +64,7 @@
 #include "read_writer.h"
 #include "read_processor.h"
 #include "produce_transform_consume.h"
+#include "semaphore.h"
 
 // Global variables are evil, this is for adaption and should be removed
 // after refactorization.
@@ -1228,7 +1229,7 @@ struct ReadTransformer
         _programParams(programParams), _processingParams(processingParams), _demultiplexingParams(demultiplexingParams),
         _adapterTrimmingParams(adapterTrimmingParams), _qualityTrimmingParams(qualityTrimmingParams), _finder(finder){};
 
-    auto transform(TpReads reads)
+    auto operator()(TpReads reads)
     {
         GeneralStats generalStats(length(_demultiplexingParams.barcodeIds) + 1, _adapterTrimmingParams.adapters.size());
         generalStats.readCount = reads->size();
@@ -1271,21 +1272,22 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     const unsigned int threadIdleSleepTimeMS = 10;  // only used when useSemaphoreForIdleWaiting = false
     constexpr bool useSemaphoreForIdleWaiting = true;
     using TWriteItem = std::tuple < std::unique_ptr<std::vector<TRead<TSeq>>>, decltype(DemultiplexingParams::barcodeIds), GeneralStats>;
+    using TReadItem = std::vector<TRead<TSeq>>;
     
     using TReadReader = ReadReader<TRead, TSeq, ProgramParams, InputFileStreams>;
     TReadReader readReader(inputFileStreams, programParams);
-    using Producer = Produce<TReadReader, std::vector<TRead<TSeq>>, useSemaphoreForIdleWaiting>;
-    Producer producer(readReader, programParams.num_threads, threadIdleSleepTimeMS);
+    using Producer = ptc::Produce<TReadReader, TReadItem, LightweightSemaphore>;
+    Producer producer(readReader);
 
     using TTransformer = ReadTransformer<TRead<TSeq>, TEsaFinder>;
     TTransformer transformer(programParams, processingParams, demultiplexingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder);
 
     using TReadWriter = ReadWriter<TRead, TSeq, TWriteItem, OutputStreams, ProgramParams>;
     TReadWriter readWriter(outputStreams, programParams);
-    using Consumer = Reduce<TReadWriter, TWriteItem, ProgramParams, useSemaphoreForIdleWaiting>;
-    Consumer consumer(readWriter, programParams.num_threads, threadIdleSleepTimeMS);
+    using Consumer = ptc::Reduce<TReadWriter, TWriteItem, LightweightSemaphore>;
+    Consumer consumer(readWriter);
     
-    PTC_unit<Producer, TTransformer, Consumer> ptc_unit(producer, transformer, consumer, programParams.num_threads);
+    auto ptc_unit = ptc::make_ptc_unit(producer, transformer, consumer, programParams.num_threads);
 
     TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
 

@@ -5,9 +5,6 @@
 #pragma once
 
 #include <string>
-#include <future>
-
-#include "semaphore.h"
 
 class OutputStreams
 {
@@ -153,7 +150,7 @@ public:
     ReadWriter(TOutputStreams& outputStreams, const TProgramParams& programParams) :
         _outputStreams(outputStreams), _programParams(programParams), _startTime(std::chrono::steady_clock::now()) {};
 
-    void accept(TItem&& item)
+    void operator()(TItem&& item)
     {
         const auto t1 = std::chrono::steady_clock::now();
         _outputStreams.writeSeqs(std::move(*std::get<0>(item)), std::get<1>(item));
