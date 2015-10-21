@@ -181,7 +181,7 @@ public:
         {
             std::unique_ptr<TWriteItem> currentWriteItem;
             bool nothingToDo = false;
-            while (_run.load(std::memory_order_relaxed) && !nothingToDo)
+            while (_run.load(std::memory_order_relaxed) || !nothingToDo)
             {
                 nothingToDo = true;
                 for (auto& readSet : _tlsReadSets)
