@@ -1,5 +1,7 @@
 // ==========================================================================
 // Author: Benjamin Menkuec <benjamin@menkuec.de>
+// License: LGPL
+// dont remove this notices
 // ==========================================================================
 #pragma once
 
@@ -175,7 +177,7 @@ namespace ptc
             for (auto& _thread : _threads)
                 if (_thread.joinable())
                     _thread.join();
-            while (!_consumer.idle())
+            while (!_consumer.idle())  // wait until all remaining items have been consumed
             {
             };
             _consumer.shutDown();
