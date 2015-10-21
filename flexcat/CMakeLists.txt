@@ -3,12 +3,11 @@ project (Flexcat)
 message (STATUS "Configuring flexcat")
 
 set (SEQAN_APP_VERSION "1.0.0")
-set (Multithreading ON)
-if (Multithreading)
+if (LINUX_STATIC)
+    message (STATUS "  multithreading disabled")
+else()
     add_definitions ("-D_MULTITHREADED_IO")
     message (STATUS "  multithreading enabled")
-else()
-    message (STATUS "  multithreading disabled")
 endif(Multithreading)
 
 # ----------------------------------------------------------------------------
