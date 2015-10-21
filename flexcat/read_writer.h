@@ -180,15 +180,16 @@ public:
         _thread = std::thread([this]()
         {
             std::unique_ptr<TWriteItem> currentWriteItem;
-            while (_run)
+            bool nothingToDo = false;
+            while (_run.load(std::memory_order_relaxed) && !nothingToDo)
             {
-                bool nothingToDo = true;
+                nothingToDo = true;
                 for (auto& readSet : _tlsReadSets)
                 {
                     if (readSet.load(std::memory_order_relaxed) != nullptr)
                     {
                         currentWriteItem.reset(readSet.load(std::memory_order_relaxed));
-                        readSet.store(nullptr, std::memory_order_relaxed); // make the slot free again
+                        readSet.store(nullptr, std::memory_order_release); // make the slot free again
                         if (useSemaphore)
                             slotEmptySemaphore.signal();
                         nothingToDo = false;
@@ -236,7 +237,7 @@ public:
                 if (reads.load(std::memory_order_relaxed) == nullptr)
                 {
                     TWriteItem* temp = nullptr;
-                    if (reads.compare_exchange_strong(temp, writeItem, std::memory_order_relaxed))
+                    if (reads.compare_exchange_strong(temp, writeItem, std::memory_order_acq_rel))  // acq_rel to make sure, that idle does not return true before all reads are written
                     {
                         if (useSemaphore)
                             readAvailableSemaphore.signal();
@@ -253,7 +254,7 @@ public:
     }
     void getStats(std::tuple_element_t<2, TWriteItem>& stats)
     {
-        _run.store(false);
+        _run.store(false, std::memory_order_relaxed);
         if (useSemaphore)
             readAvailableSemaphore.signal();
         if (_thread.joinable())
@@ -263,7 +264,7 @@ public:
     bool idle() noexcept
     {
         for (auto& readSet : _tlsReadSets)
-            if (readSet.load(std::memory_order_relaxed) != nullptr)
+            if (readSet.load(std::memory_order_acquire) != nullptr) // acq to make sure, that idle does not return true before all reads are written
                 return false;
         return true;
     }
