@@ -1269,8 +1269,6 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     const QualityTrimmingParams& qualityTrimmingParams, TEsaFinder& esaFinder,
     OutputStreams& outputStreams, TStats& stats)
 {
-    const unsigned int threadIdleSleepTimeMS = 10;  // only used when useSemaphoreForIdleWaiting = false
-    constexpr bool useSemaphoreForIdleWaiting = true;
     using TWriteItem = std::tuple < std::unique_ptr<std::vector<TRead<TSeq>>>, decltype(DemultiplexingParams::barcodeIds), GeneralStats>;
     using TReadItem = std::vector<TRead<TSeq>>;
     
@@ -1295,7 +1293,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     ptc_unit.start();
     //while (!ptc_unit.finished()) // shortcut is used most of the time -> xxx.idle() get called only after eof is set
     //{
-    //    std::this_thread::sleep_for(std::chrono::milliseconds(10*threadIdleSleepTimeMS));
+    //    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     //}
     ptc_unit.waitForFinish();
     readWriter.getStats(stats);

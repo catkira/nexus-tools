@@ -32,6 +32,7 @@ class OutputStreams
     //Adds a new output streams to the collection of streams.
     void _addStream(TSeqStream& stream, const std::string fileName, int id, bool useDefault)
     {
+        (void)id;
         std::string path = getBaseFilename();
         if (fileName != "")
             path += "_";

@@ -141,12 +141,6 @@ namespace ptc
     };
 
     template <typename TProducer, typename TTransformer, typename TConsumer>
-    auto make_ptc_unit(TProducer& producer, TTransformer& transformer, TConsumer& consumer, const unsigned int numThreads)
-    {
-        return PTC_unit<TProducer, TTransformer, TConsumer>(producer, transformer, consumer, numThreads);
-    }
-
-    template <typename TProducer, typename TTransformer, typename TConsumer>
     struct PTC_unit
     {
     private:
@@ -193,7 +187,11 @@ namespace ptc
 
     };
 
-
+    template <typename TProducer, typename TTransformer, typename TConsumer>
+    auto make_ptc_unit(TProducer& producer, TTransformer& transformer, TConsumer& consumer, const unsigned int numThreads)
+    {
+        return PTC_unit<TProducer, TTransformer, TConsumer>(producer, transformer, consumer, numThreads);
+    }
 
 
     template<typename TSink, typename TItem, typename TSemaphore>
