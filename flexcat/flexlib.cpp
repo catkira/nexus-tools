@@ -1306,12 +1306,12 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
 
 #ifdef _MULTITHREADED_IO
-    ptc_unit.start();
+    ptc_unit->start();
     //while (!ptc_unit.finished()) // shortcut is used most of the time -> xxx.idle() get called only after eof is set
     //{
     //    std::this_thread::sleep_for(std::chrono::milliseconds(100));
     //}
-    ptc_unit.waitForFinish();
+    ptc_unit->waitForFinish();
     readWriter.getStats(stats);
 #else
     std::unique_ptr<std::vector<TRead<TSeq>>> readSet;

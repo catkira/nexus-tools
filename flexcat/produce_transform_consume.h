@@ -45,7 +45,7 @@ namespace ptc
         using item_type = typename std::result_of<TSource()>::type::element_type;
 
     private:
-        TSource _source;
+        TSource& _source;
         std::vector<std::atomic<item_type*>> _tlsItems;
         std::thread _thread;
         std::atomic_bool _eof;
@@ -177,52 +177,6 @@ namespace ptc
         };
     };
 
-    template <typename TProducer, typename TTransformer, typename TConsumer>
-    struct PTC_unit
-    {
-    private:
-        // main thread variables
-        TProducer& _producer;
-        TTransformer& _transformer;
-        TConsumer& _consumer;
-        std::vector<std::thread> _threads;
-
-    public:
-        PTC_unit(TProducer& producer, TTransformer& transformer, TConsumer& consumer, const unsigned int numThreads) :
-            _producer(producer), _transformer(transformer), _consumer(consumer), _threads(numThreads) {};
-
-        void start()
-        {
-            _producer.start(_threads.size() + 1);
-            _consumer.start(_threads.size() + 1);
-            for (auto& _thread : _threads)
-            {
-                _thread = std::thread([this]()
-                {
-                    std::unique_ptr<typename TProducer::item_type> item;
-                    while (_producer.getItem(item))
-                    {
-                        _consumer.pushItem(_transformer(std::move(item)));
-                    }
-                });
-            }
-        }
-        void waitForFinish()
-        {
-            for (auto& _thread : _threads)
-                if (_thread.joinable())
-                    _thread.join();
-            while (!_consumer.idle())  // wait until all remaining items have been consumed
-            {
-            };
-            _consumer.shutDown();
-        }
-        bool finished() noexcept
-        {
-            return _producer.eof();
-        }
-
-    };
 
     template<typename TSink, typename TWaitPolicy>
     struct Consume
@@ -339,16 +293,58 @@ namespace ptc
         }
     };
 
+    template <typename TSource, typename TTransformer, typename TSink, typename TWaitPolicy>
+    struct PTC_unit
+    {
+    private:
+        // main thread variables
+        Produce<TSource, TWaitPolicy> _producer;
+        TTransformer _transformer;
+        Consume<TSink, TWaitPolicy> _consumer;
+        std::vector<std::thread> _threads;
+
+    public:
+        PTC_unit(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads) :
+            _producer(source), _transformer(transformer), _consumer(sink), _threads(numThreads) {};
+
+        void start()
+        {
+            _producer.start(_threads.size() + 1);
+            _consumer.start(_threads.size() + 1);
+            for (auto& _thread : _threads)
+            {
+                _thread = std::thread([this]()
+                {
+                    std::unique_ptr<typename Produce<TSource, TWaitPolicy>::item_type> item;
+                    while (_producer.getItem(item))
+                    {
+                        _consumer.pushItem(_transformer(std::move(item)));
+                    }
+                });
+            }
+        }
+        void waitForFinish()
+        {
+            for (auto& _thread : _threads)
+                if (_thread.joinable())
+                    _thread.join();
+            while (!_consumer.idle())  // wait until all remaining items have been consumed
+            {
+            };
+            _consumer.shutDown();
+        }
+        bool finished() noexcept
+        {
+            return _producer.eof();
+        }
+
+    };
+
 
     template <typename TSource, typename TTransformer, typename TSink>
     auto unordered_ptc(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads)
     {
-        using Producer = Produce<TSource, WaitPolicy::Semaphore>;
-        Producer producer(source);
-        using Consumer = Consume<TSink, WaitPolicy::Semaphore>;
-        Consumer consumer(sink);
-
-        return PTC_unit<Producer, TTransformer, Consumer>(producer, transformer, consumer, numThreads);
+        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, WaitPolicy::Semaphore>>(source, transformer, sink, numThreads);
     }
 
 }
