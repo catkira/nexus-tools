@@ -1280,19 +1280,26 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     //unsigned int numReads = 0;
     //auto readReader2 = [&programParams, &inputFileStreams, &numReads]() {
     //    auto item = std::make_unique<std::vector<TRead<TSeq>>>();
-    //    try {
-    //        readReads(*item, programParams.records, inputFileStreams);
-    //    }
-    //    catch (std::exception& e) {
-    //        std::cout << "exception while reading :" << e.what() << " after read " << numReads << std::endl;
-    //        throw(e);
-    //    }
+    //    readReads(*item, programParams.records, inputFileStreams);
     //    loadMultiplex(*item, programParams.records, inputFileStreams.fileStreamMultiplex);
     //    numReads += item->size();
     //    if (item->empty() || numReads >= programParams.firstReads)    // no more reads available or maximum read number reached -> dont do further reads
     //        item.release();
     //    return std::move(item);
     //};
+
+    //auto transformer2 = [&](auto reads){
+    //    GeneralStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
+    //    generalStats.readCount = reads->size();
+    //    preprocessingStage(processingParams, *reads, generalStats);
+    //    if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, generalStats) != 0)
+    //        std::cerr << "DemultiplexingStage error" << std::endl;
+    //    adapterTrimmingStage(adapterTrimmingParams, *reads, generalStats);
+    //    qualityTrimmingStage(qualityTrimmingParams, *reads, generalStats);
+    //    postprocessingStage(processingParams, *reads, generalStats);
+    //    return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, generalStats));
+    //};
+
 
     auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
 

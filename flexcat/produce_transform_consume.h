@@ -224,18 +224,6 @@ namespace ptc
 
     };
 
-    template <typename TSource, typename TTransformer, typename TSink>
-    auto unordered_ptc(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads)
-    {
-        using Producer = ptc::Produce<TSource, ptc::WaitPolicy::Semaphore>;
-        Producer producer(source);
-        using Consumer = ptc::Consume<TSink, ptc::WaitPolicy::Semaphore>;
-        Consumer consumer(sink);
-
-        return PTC_unit<Producer, TTransformer, Consumer>(producer, transformer, consumer, numThreads);
-    }
-
-
     template<typename TSink, typename TWaitPolicy>
     struct Consume
     {
@@ -350,5 +338,17 @@ namespace ptc
             return true;
         }
     };
+
+
+    template <typename TSource, typename TTransformer, typename TSink>
+    auto unordered_ptc(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads)
+    {
+        using Producer = Produce<TSource, WaitPolicy::Semaphore>;
+        Producer producer(source);
+        using Consumer = Consume<TSink, WaitPolicy::Semaphore>;
+        Consumer consumer(sink);
+
+        return PTC_unit<Producer, TTransformer, Consumer>(producer, transformer, consumer, numThreads);
+    }
 
 }
