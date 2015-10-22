@@ -64,7 +64,6 @@
 #include "read_writer.h"
 #include "read_processor.h"
 #include "produce_transform_consume.h"
-#include "semaphore.h"
 
 // Global variables are evil, this is for adaption and should be removed
 // after refactorization.
@@ -1274,7 +1273,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     
     using TReadReader = ReadReader<TRead, TSeq, ProgramParams, InputFileStreams>;
     TReadReader readReader(inputFileStreams, programParams);
-    using Producer = ptc::Produce<TReadReader, TReadItem, LightweightSemaphore>;
+    using Producer = ptc::Produce<TReadReader, TReadItem, ptc::WaitPolicy::Semaphore>;
     Producer producer(readReader);
 
     using TTransformer = ReadTransformer<TRead<TSeq>, TEsaFinder>;
@@ -1282,7 +1281,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
     using TReadWriter = ReadWriter<TRead, TSeq, TWriteItem, OutputStreams, ProgramParams>;
     TReadWriter readWriter(outputStreams, programParams);
-    using Consumer = ptc::Consume<TReadWriter, TWriteItem, LightweightSemaphore>;
+    using Consumer = ptc::Consume<TReadWriter, TWriteItem, ptc::WaitPolicy::Semaphore>;
     Consumer consumer(readWriter);
     
     auto ptc_unit = ptc::make_ptc_unit(producer, transformer, consumer, programParams.num_threads);

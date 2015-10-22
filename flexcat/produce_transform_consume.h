@@ -7,12 +7,18 @@
 
 #include <future>
 #include <functional>
+#include "semaphore.h"
 
 //#include "helper_functions.h"
 
 namespace ptc
 {
-    struct NoSemaphore {};
+    namespace WaitPolicy
+    {
+        struct Sleep {};
+        struct Semaphore {};
+        struct Spin {};
+    };
     constexpr unsigned int defaultSleepMS = 10;
 
     /*
@@ -21,7 +27,7 @@ namespace ptc
     */
 
     // reads read sets from hd and puts them into slots, waits if no free slots are available
-    template<typename TSource, typename TItem, typename TSemaphore>
+    template<typename TSource, typename TItem, typename TWaitPolicy>
     struct Produce
     {
         using item_type = TItem;
@@ -32,8 +38,36 @@ namespace ptc
         std::thread _thread;
         std::atomic_bool _eof;
         unsigned int _sleepMS;
-        TSemaphore slotEmptySemaphore;
-        TSemaphore readAvailableSemaphore;
+        LightweightSemaphore slotEmptySemaphore;
+        LightweightSemaphore itemAvailableSemaphore;
+
+        void signalSlotAvailable(WaitPolicy::Sleep) {}
+        void signalSlotAvailable(WaitPolicy::Semaphore) {
+            slotEmptySemaphore.signal();
+        }
+
+        void signalItemAvailable(const bool eof, WaitPolicy::Sleep) {}
+        void signalItemAvailable(const bool eof, WaitPolicy::Semaphore){
+            if (eof)  // wakeup all potentially waiting threads so that they can be joined
+                itemAvailableSemaphore.signal(_tlsItems.size());
+            else
+                itemAvailableSemaphore.signal();
+        }
+
+        void waitForItem(WaitPolicy::Sleep) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+        }
+        void waitForItem(WaitPolicy::Semaphore) {
+            itemAvailableSemaphore.wait();
+        }
+
+        void waitForSlot(WaitPolicy::Sleep) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+        }
+        void waitForSlot(WaitPolicy::Semaphore) {
+            slotEmptySemaphore.wait();
+        }
+
 
     public:
         Produce(TSource& source, unsigned int sleepMS = defaultSleepMS)
@@ -74,20 +108,14 @@ namespace ptc
                             else
                                 _eof.store(true, std::memory_order_release);
 
-                            if (!std::is_same<TSemaphore, NoSemaphore>::value && _eof.load(std::memory_order_relaxed))  // wakeup all potentially waiting threads so that they can be joined
-                                readAvailableSemaphore.signal(_tlsItems.size());
-                            else if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                                readAvailableSemaphore.signal();
+                            signalItemAvailable(_eof.load(std::memory_order_relaxed), TWaitPolicy());
                         }
                         if (_eof.load(std::memory_order_relaxed))
                             return;
                     }
                     if (noEmptySlot)  // no empty slow was found, wait a bit
                     {
-                        if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                            slotEmptySemaphore.wait();
-                        else
-                            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+                        waitForSlot(TWaitPolicy());
                     }
                 }
             });
@@ -124,8 +152,7 @@ namespace ptc
                         if (item.compare_exchange_strong(temp, nullptr, std::memory_order_relaxed))
                         {
                             returnItem.reset(temp);
-                            if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                                slotEmptySemaphore.signal();
+                            signalSlotAvailable(TWaitPolicy());
                             return true;
                         }
                     }
@@ -133,10 +160,7 @@ namespace ptc
                 //std::cout << std::this_thread::get_id() << "-2" << std::endl;
                 if (eof) // only return if _eof == true AND all the slots are empty -> therefore read eof BEFORE checking the slots
                     return false;
-                if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                    readAvailableSemaphore.wait();
-                else
-                    std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+                waitForItem(TWaitPolicy());
             }
             return false;
         };
@@ -196,7 +220,7 @@ namespace ptc
     }
 
 
-    template<typename TSink, typename TItem, typename TSemaphore>
+    template<typename TSink, typename TItem, typename TWaitPolicy>
     struct Consume
     {
     public:
@@ -207,8 +231,27 @@ namespace ptc
         std::thread _thread;
         std::atomic_bool _run;
         unsigned int _sleepMS;
-        TSemaphore itemAvailableSemaphore;
-        TSemaphore slotEmptySemaphore;
+        LightweightSemaphore itemAvailableSemaphore;
+        LightweightSemaphore slotEmptySemaphore;
+
+        void signalItemAvailable(WaitPolicy::Sleep) {}
+        void signalItemAvailable(WaitPolicy::Semaphore){
+            itemAvailableSemaphore.signal();}
+
+        void signalSlotAvailable(WaitPolicy::Sleep) {}
+        void signalSlotAvailable(WaitPolicy::Semaphore) {
+            slotEmptySemaphore.signal();}
+
+        void waitForItem(WaitPolicy::Sleep) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));}
+        void waitForItem(WaitPolicy::Semaphore) {
+            itemAvailableSemaphore.wait();}
+
+        void waitForSlot(WaitPolicy::Sleep) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));}
+        void waitForSlot(WaitPolicy::Semaphore) {
+            slotEmptySemaphore.wait();}
+
 
     public:
         Consume(TSink& sink, unsigned int sleepMS = defaultSleepMS)
@@ -240,8 +283,7 @@ namespace ptc
                         {
                             currentItem.reset(item.load(std::memory_order_relaxed));
                             item.store(nullptr, std::memory_order_release); // make the slot free again
-                            if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                                slotEmptySemaphore.signal();
+                            signalSlotAvailable(TWaitPolicy());
                             nothingToDo = false;
 
                             //std::this_thread::sleep_for(std::chrono::milliseconds(1));  // used for debuggin slow hd case
@@ -251,12 +293,7 @@ namespace ptc
                     if (nothingToDo)
                     {
                         //std::cout << std::this_thread::get_id() << "-4" << std::endl;
-                        if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                        {
-                            itemAvailableSemaphore.wait();
-                        }
-                        else
-                            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+                        waitForItem(TWaitPolicy());
                     }
                 }
             });
@@ -273,24 +310,19 @@ namespace ptc
                         if (item.compare_exchange_strong(temp, newItem.get(), std::memory_order_acq_rel))  // acq_rel to make sure, that idle does not return true before all reads are written
                         {
                             newItem.release();
-                            if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                                itemAvailableSemaphore.signal();
+                            signalItemAvailable(TWaitPolicy());
                             return;
                         }
                     }
                 }
                 //std::cout << std::this_thread::get_id() << "-3" << std::endl;
-                if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                    slotEmptySemaphore.wait();
-                else
-                    std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+                waitForSlot(TWaitPolicy());
             }
         }
         void shutDown()
         {
             _run.store(false, std::memory_order_relaxed);
-            if (!std::is_same<TSemaphore, NoSemaphore>::value)
-                itemAvailableSemaphore.signal();
+            signalItemAvailable(TWaitPolicy());
             if (_thread.joinable())
                 _thread.join();
         }
