@@ -13,6 +13,18 @@
 
 namespace ptc
 {
+    template<typename F, typename Ret, typename A, typename... Rest>
+    A helper(Ret(F::*)(A, Rest...));
+
+    template<typename F, typename Ret, typename A, typename... Rest>
+    A helper(Ret(F::*)(A, Rest...) const);
+    
+    template<typename F>
+    struct first_argument {
+        using type = decltype(helper(&F::operator()));
+    };
+
+
     namespace WaitPolicy
     {
         struct Sleep {};
@@ -27,14 +39,14 @@ namespace ptc
     */
 
     // reads read sets from hd and puts them into slots, waits if no free slots are available
-    template<typename TSource, typename TItem, typename TWaitPolicy>
+    template<typename TSource, typename TWaitPolicy>
     struct Produce
     {
-        using item_type = TItem;
+        using item_type = typename std::result_of<TSource()>::type::element_type;
 
     private:
         TSource _source;
-        std::vector<std::atomic<TItem*>> _tlsItems;
+        std::vector<std::atomic<item_type*>> _tlsItems;
         std::thread _thread;
         std::atomic_bool _eof;
         unsigned int _sleepMS;
@@ -89,10 +101,9 @@ namespace ptc
             - return from thread if eof == true
             - go to sleep if no free slot is available
             */
-            _tlsItems = std::vector<std::atomic<TItem*>>(numSlots); // can not use resize, because TItem is not copyable if it contains unique_ptr
+            _tlsItems = std::vector<std::atomic<item_type*>>(numSlots); // can not use resize, because TItem is not copyable if it contains unique_ptr
             _thread = std::thread([this]()
             {
-                std::unique_ptr <TItem> currentItem;
                 bool noEmptySlot = true;
                 while (true)
                 {
@@ -102,8 +113,8 @@ namespace ptc
                         if (item.load(std::memory_order_relaxed) == nullptr)
                         {
                             noEmptySlot = false;
-                            currentItem = std::make_unique<TItem>();
-                            if (_source(currentItem))
+                            auto currentItem = _source();
+                            if (currentItem)
                                 item.store(currentItem.release(), std::memory_order_relaxed);
                             else
                                 _eof.store(true, std::memory_order_release);
@@ -139,9 +150,9 @@ namespace ptc
         - check if eof is reached, if yes return false
         - go to sleep until data is available
         */
-        bool getItem(std::unique_ptr<TItem>& returnItem) noexcept
+        bool getItem(std::unique_ptr<item_type>& returnItem) noexcept
         {
-            TItem* temp = nullptr;
+            item_type* temp = nullptr;
             while (true)
             {
                 bool eof = _eof.load(std::memory_order_acquire);
@@ -213,21 +224,26 @@ namespace ptc
 
     };
 
-    template <typename TProducer, typename TTransformer, typename TConsumer>
-    auto make_ptc_unit(TProducer& producer, TTransformer& transformer, TConsumer& consumer, const unsigned int numThreads)
+    template <typename TSource, typename TTransformer, typename TSink>
+    auto unordered_ptc(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads)
     {
-        return PTC_unit<TProducer, TTransformer, TConsumer>(producer, transformer, consumer, numThreads);
+        using Producer = ptc::Produce<TSource, ptc::WaitPolicy::Semaphore>;
+        Producer producer(source);
+        using Consumer = ptc::Consume<TSink, ptc::WaitPolicy::Semaphore>;
+        Consumer consumer(sink);
+
+        return PTC_unit<Producer, TTransformer, Consumer>(producer, transformer, consumer, numThreads);
     }
 
 
-    template<typename TSink, typename TItem, typename TWaitPolicy>
+    template<typename TSink, typename TWaitPolicy>
     struct Consume
     {
     public:
-        using item_type = TItem;
+        using item_type = typename first_argument<TSink>::type::element_type;
     private:
         TSink& _sink;
-        std::vector<std::atomic<TItem*>> _tlsItems;
+        std::vector<std::atomic<item_type*>> _tlsItems;
         std::thread _thread;
         std::atomic_bool _run;
         unsigned int _sleepMS;
@@ -269,10 +285,10 @@ namespace ptc
         void start(const unsigned int numSlots)
         {
             _run = true;
-            _tlsItems = std::vector<std::atomic<TItem*>>(numSlots);
+            _tlsItems = std::vector<std::atomic<item_type*>>(numSlots);
             _thread = std::thread([this]()
             {
-                std::unique_ptr<TItem> currentItem;
+                std::unique_ptr<item_type> currentItem;
                 bool nothingToDo = false;
                 while (_run.load(std::memory_order_relaxed) || !nothingToDo)
                 {
@@ -287,7 +303,7 @@ namespace ptc
                             nothingToDo = false;
 
                             //std::this_thread::sleep_for(std::chrono::milliseconds(1));  // used for debuggin slow hd case
-                            _sink(std::move(*currentItem));
+                            _sink(std::move(currentItem));
                         }
                     }
                     if (nothingToDo)
@@ -298,7 +314,7 @@ namespace ptc
                 }
             });
         }
-        void pushItem(std::unique_ptr<TItem> newItem)     // blocks until item could be added
+        void pushItem(std::unique_ptr<item_type> newItem)     // blocks until item could be added
         {
             while (true)
             {
@@ -306,7 +322,7 @@ namespace ptc
                 {
                     if (item.load(std::memory_order_relaxed) == nullptr)
                     {
-                        TItem* temp = nullptr;
+                        item_type* temp = nullptr;
                         if (item.compare_exchange_strong(temp, newItem.get(), std::memory_order_acq_rel))  // acq_rel to make sure, that idle does not return true before all reads are written
                         {
                             newItem.release();

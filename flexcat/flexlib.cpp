@@ -1268,23 +1268,33 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     const QualityTrimmingParams& qualityTrimmingParams, TEsaFinder& esaFinder,
     OutputStreams& outputStreams, TStats& stats)
 {
-    using TWriteItem = std::tuple < std::unique_ptr<std::vector<TRead<TSeq>>>, decltype(DemultiplexingParams::barcodeIds), GeneralStats>;
-    using TReadItem = std::vector<TRead<TSeq>>;
-    
     using TReadReader = ReadReader<TRead, TSeq, ProgramParams, InputFileStreams>;
     TReadReader readReader(inputFileStreams, programParams);
-    using Producer = ptc::Produce<TReadReader, TReadItem, ptc::WaitPolicy::Semaphore>;
-    Producer producer(readReader);
 
     using TTransformer = ReadTransformer<TRead<TSeq>, TEsaFinder>;
     TTransformer transformer(programParams, processingParams, demultiplexingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder);
 
-    using TReadWriter = ReadWriter<TRead, TSeq, TWriteItem, OutputStreams, ProgramParams>;
+    using TReadWriter = ReadWriter<TRead, TSeq, OutputStreams, ProgramParams>;
     TReadWriter readWriter(outputStreams, programParams);
-    using Consumer = ptc::Consume<TReadWriter, TWriteItem, ptc::WaitPolicy::Semaphore>;
-    Consumer consumer(readWriter);
-    
-    auto ptc_unit = ptc::make_ptc_unit(producer, transformer, consumer, programParams.num_threads);
+
+    //unsigned int numReads = 0;
+    //auto readReader2 = [&programParams, &inputFileStreams, &numReads]() {
+    //    auto item = std::make_unique<std::vector<TRead<TSeq>>>();
+    //    try {
+    //        readReads(*item, programParams.records, inputFileStreams);
+    //    }
+    //    catch (std::exception& e) {
+    //        std::cout << "exception while reading :" << e.what() << " after read " << numReads << std::endl;
+    //        throw(e);
+    //    }
+    //    loadMultiplex(*item, programParams.records, inputFileStreams.fileStreamMultiplex);
+    //    numReads += item->size();
+    //    if (item->empty() || numReads >= programParams.firstReads)    // no more reads available or maximum read number reached -> dont do further reads
+    //        item.release();
+    //    return std::move(item);
+    //};
+
+    auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
 
     TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
 

@@ -138,10 +138,12 @@ public:
 };
 
 
-template<template<typename> class TRead, typename TSeq, typename TItem, typename TOutputStreams, typename TProgramParams>
+template<template<typename> class TRead, typename TSeq, typename TOutputStreams, typename TProgramParams>
 struct ReadWriter
 {
 private:
+    using TItem = std::tuple < std::unique_ptr<std::vector<TRead<TSeq>>>, decltype(DemultiplexingParams::barcodeIds), GeneralStats>;
+
     TOutputStreams& _outputStreams;
     const TProgramParams& _programParams;
     std::chrono::time_point<std::chrono::steady_clock> _startTime;
@@ -151,11 +153,11 @@ public:
     ReadWriter(TOutputStreams& outputStreams, const TProgramParams& programParams) :
         _outputStreams(outputStreams), _programParams(programParams), _startTime(std::chrono::steady_clock::now()) {};
 
-    void operator()(TItem&& item)
+    void operator()(std::unique_ptr<TItem> item)
     {
         const auto t1 = std::chrono::steady_clock::now();
-        _outputStreams.writeSeqs(std::move(*std::get<0>(item)), std::get<1>(item));
-        _stats += std::get<2>(item);
+        _outputStreams.writeSeqs(std::move(*std::get<0>(*item)), std::get<1>(*item));
+        _stats += std::get<2>(*item);
 
         // terminal output
         const auto ioTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
