@@ -56,12 +56,6 @@ namespace ptc
     struct OrderManager{
         template <typename TItem>
         using ItemIdPair_t = TItem;
-        //template <typename TTransformer, typename TItemIdPair>
-        //auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
-        //    -> std::unique_ptr<ItemIdPair_t<std::result_of_t<TTransformer(TItemIdPair)>>>
-        //{
-        //    return transformer(itemIdPair);
-        //}
     };
 
     template<>
@@ -81,6 +75,11 @@ namespace ptc
         {
             return std::move(item);
         }
+        template <typename TItem, typename TNewItem>
+        bool accept_item(TItem item, TNewItem&& newItem, const unsigned int numSlots) noexcept {
+            return item == nullptr;
+        }
+
         template <typename TItem>
         bool is_next_item(TItem item){
             return item != nullptr;
@@ -97,16 +96,20 @@ namespace ptc
     struct OrderManager<OrderPolicy::Ordered>
     {
     private:
-        unsigned int id;
+        using id_t = unsigned int;
+        std::atomic<id_t> id;
     public:
         template <typename TItem>
-        using ItemIdPair_t = mypair<TItem*, decltype(id)>;
+        using ItemIdPair_t = mypair<TItem*, id_t>;
 
         OrderManager() : id(0) {};
         template <typename TItem>
-        auto appendOrderId(TItem item) -> mypair<TItem, decltype(id)>*
+        auto appendOrderId(TItem item) -> mypair<TItem, id_t>*
         {
-            return new mypair<TItem, decltype(id)>(item, id++);
+            auto current_id = id.load();
+            std::cout << "start id: " << current_id << std::endl;
+            id.fetch_add(1);
+            return new mypair<TItem, id_t>(item, current_id);
         }
         template <typename TItem>
         auto extractItem(std::unique_ptr<TItem>&& itemIdPair) 
@@ -114,10 +117,23 @@ namespace ptc
             std::unique_ptr<std::remove_pointer_t<typename TItem::first_type>> temp(itemIdPair->first);
             return std::move(temp);
         }
+        template <typename TItem, typename TNewItem>
+        bool accept_item(TItem item, TNewItem&& newItem, const unsigned int numSlots) noexcept {
+            if (item == nullptr)
+            {
+                std::cout << "next id:" << id.load() << " current id: " << newItem->second;
+                if ((newItem->second - id.load()) < (numSlots))
+                    std::cout << " -> accept";
+                std::cout << std::endl;
+                int a = 0;
+            }
+
+            return item == nullptr && (newItem->second - id.load())<(numSlots);
+        }
         template <typename TItem>
         bool is_next_item(TItem item)
         {
-            if (item != nullptr && item->second == id)
+            if (item != nullptr && item->second == id.load())
             {
                 ++id;
                 return true;
@@ -125,7 +141,7 @@ namespace ptc
             return false;
         }
         template <typename TTransformer, typename TItemIdPair>
-        auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair) 
+        static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair) 
         {
             std::unique_ptr<std::remove_pointer_t<decltype(itemIdPair->first)>> item;
             item.reset(itemIdPair->first);
@@ -370,11 +386,12 @@ namespace ptc
         template <typename TItem>
         void pushItem(TItem&& newItem)     // blocks until item could be added
         {
+            const auto numSlots = _tlsItems.size();
             while (true)
             {
                 for (auto& item : _tlsItems)
                 {
-                    if (item.load(std::memory_order_relaxed) == nullptr)
+                    if (accept_item(item.load(std::memory_order_relaxed), newItem, numSlots))
                     {
                         typename TItem::element_type* temp = nullptr;
                         if (item.compare_exchange_strong(temp, newItem.get(), std::memory_order_acq_rel))  // acq_rel to make sure, that idle does not return true before all reads are written
@@ -406,7 +423,7 @@ namespace ptc
     };
 
     template <typename TSource, typename TTransformer, typename TSink, typename TOrderPolicy, typename TWaitPolicy>
-    struct PTC_unit : private OrderManager<TOrderPolicy>
+    struct PTC_unit
     {
     private:
         // main thread variables
@@ -432,14 +449,7 @@ namespace ptc
                     std::unique_ptr<typename Produce_t::item_type> item;
                     while (_producer.getItem(item))
                     {
-                        //if(std::is_same<TOrderPolicy,OrderPolicy::Unordered>::value)
-                        //    _consumer.pushItem(_transformer(std::move(item)));
-                        //else
-                        {
-                            //auto& res = _transformer(std::move(getItem(std::move(item))));
-                            auto temp = callTransformer(_transformer, std::move(item));
-                            _consumer.pushItem(std::move(temp));
-                        }
+                        _consumer.pushItem(std::move(OrderManager<TOrderPolicy>::callTransformer(_transformer, std::move(item))));
                     }
                 });
             }
@@ -451,8 +461,7 @@ namespace ptc
                 if (_thread.joinable())
                     _thread.join();
             while (!_consumer.idle())  // wait until all remaining items have been consumed
-            {
-            };
+            {};
             _consumer.shutDown();
         }
         
