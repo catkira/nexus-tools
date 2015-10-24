@@ -7,6 +7,7 @@
 
 #include <future>
 #include <functional>
+#include <ppltasks.h>
 #include "semaphore.h"
 
 //#include "helper_functions.h"
@@ -42,7 +43,7 @@ namespace ptc
     template<typename TSource, typename TWaitPolicy>
     struct Produce
     {
-        using item_type = typename std::result_of<TSource()>::type::element_type;
+        using item_type = typename std::result_of_t<TSource()>::element_type;
 
     private:
         TSource& _source;
@@ -182,7 +183,8 @@ namespace ptc
     struct Consume
     {
     public:
-        using item_type = typename first_argument<TSink>::type::element_type;
+        using item_type = typename first_argument<std::remove_reference_t<TSink>>::type::element_type;
+        using ownSink = std::is_same<TSink, std::remove_reference_t<TSink>>;
     private:
         TSink& _sink;
         std::vector<std::atomic<item_type*>> _tlsItems;
@@ -212,7 +214,7 @@ namespace ptc
 
 
     public:
-        Consume(TSink& sink, unsigned int sleepMS = defaultSleepMS)
+        Consume(TSink&& sink, unsigned int sleepMS = defaultSleepMS)
             : _sink(sink), _run(false), _sleepMS(sleepMS)
         {
             for (auto& item : _tlsItems)
@@ -224,6 +226,14 @@ namespace ptc
             if (_thread.joinable())
                 _thread.join();
         }
+
+        template<typename = std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>
+        std::remove_reference_t<std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>
+        get_result()
+        {
+            return _sink.get_result();
+        }
+
         void start(const unsigned int numSlots)
         {
             _run = true;
@@ -300,12 +310,13 @@ namespace ptc
         // main thread variables
         Produce<TSource, TWaitPolicy> _producer;
         TTransformer _transformer;
-        Consume<TSink, TWaitPolicy> _consumer;
+        using Consume_t = Consume<TSink, TWaitPolicy>;
+        Consume_t _consumer;
         std::vector<std::thread> _threads;
 
     public:
-        PTC_unit(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads) :
-            _producer(source), _transformer(transformer), _consumer(sink), _threads(numThreads) {};
+        PTC_unit(TSource& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads) :
+            _producer(source), _transformer(transformer), _consumer(std::forward<TSink>(sink)), _threads(numThreads){};
 
         void start()
         {
@@ -323,7 +334,8 @@ namespace ptc
                 });
             }
         }
-        void waitForFinish()
+
+        void wait()
         {
             for (auto& _thread : _threads)
                 if (_thread.joinable())
@@ -333,6 +345,18 @@ namespace ptc
             };
             _consumer.shutDown();
         }
+        
+        template <typename = std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>
+        std::future<std::remove_reference_t<std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>>
+        get_future()
+        {
+            auto f = std::async([this]() {
+                wait();
+                return _consumer.get_result();
+            });
+            return f;
+        }
+
         bool finished() noexcept
         {
             return _producer.eof();
@@ -342,9 +366,10 @@ namespace ptc
 
 
     template <typename TSource, typename TTransformer, typename TSink>
-    auto unordered_ptc(TSource& source, TTransformer& transformer, TSink& sink, const unsigned int numThreads)
+    auto unordered_ptc(TSource&& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
     {
-        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, WaitPolicy::Semaphore>>(source, transformer, sink, numThreads);
+        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, WaitPolicy::Semaphore>>
+            (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
     }
 
 }

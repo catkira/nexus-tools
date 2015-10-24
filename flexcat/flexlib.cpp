@@ -1305,12 +1305,14 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     {
         auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
         ptc_unit->start();
+        auto f = ptc_unit->get_future();
+        stats = f.get();
         //while (!ptc_unit.finished()) // shortcut is used most of the time -> xxx.idle() get called only after eof is set
         //{
         //    std::this_thread::sleep_for(std::chrono::milliseconds(100));
         //}
-        ptc_unit->waitForFinish();
-        readWriter.getStats(stats);
+        //ptc_unit->wait();
+        //readWriter.getStats(stats);
     }
     else
     {

@@ -173,6 +173,10 @@ public:
             _lastScreenUpdate = std::chrono::steady_clock::now();
         }
     }
+    std::tuple_element_t<2, TItem> get_result()
+    {
+        return _stats;
+    }
     void getStats(std::tuple_element_t<2, TItem>& stats)
     {
         stats = _stats;
