@@ -7,10 +7,7 @@
 
 #include <future>
 #include <functional>
-#include <ppltasks.h>
 #include "semaphore.h"
-
-//#include "helper_functions.h"
 
 namespace ptc
 {
