@@ -63,7 +63,7 @@
 #include "read_reader.h"
 #include "read_writer.h"
 #include "read_processor.h"
-#include "produce_transform_consume.h"
+#include "ptc.h"
 
 // Global variables are evil, this is for adaption and should be removed
 // after refactorization.
@@ -1224,6 +1224,8 @@ unsigned int readReads(std::vector<TRead<TSeq>>& reads, const unsigned int recor
     return i;
 }
 
+
+// strange bug probably in visual studio, this is not working, but the lambda works
 template <typename TRead, typename TFinder>
 struct ReadTransformer
 {
@@ -1234,7 +1236,7 @@ struct ReadTransformer
         _programParams(programParams), _processingParams(processingParams), _demultiplexingParams(demultiplexingParams),
         _adapterTrimmingParams(adapterTrimmingParams), _qualityTrimmingParams(qualityTrimmingParams), _finder(finder){};
 
-    auto operator()(TpReads reads)
+    auto operator()(std::unique_ptr<std::vector<TRead>> reads)
     {
         GeneralStats generalStats(length(_demultiplexingParams.barcodeIds) + 1, _adapterTrimmingParams.adapters.size());
         generalStats.readCount = reads->size();
@@ -1255,7 +1257,7 @@ struct ReadTransformer
         // Postprocessing
         postprocessingStage(_processingParams, *reads, generalStats);
 
-        return std::make_unique<std::tuple<TpReads, decltype(_demultiplexingParams.barcodeIds ), decltype(generalStats) >>(std::make_tuple(std::move(reads), _demultiplexingParams.barcodeIds, generalStats));
+        return std::make_unique<std::tuple<decltype(reads), decltype(_demultiplexingParams.barcodeIds ), decltype(generalStats) >>(std::make_tuple(std::move(reads), _demultiplexingParams.barcodeIds, generalStats));
     }
 private:
     const ProgramParams& _programParams;
@@ -1292,17 +1294,17 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     //    return std::move(item);
     //};
 
-    //auto transformer2 = [&](auto reads){
-    //    GeneralStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
-    //    generalStats.readCount = reads->size();
-    //    preprocessingStage(processingParams, *reads, generalStats);
-    //    if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, generalStats) != 0)
-    //        std::cerr << "DemultiplexingStage error" << std::endl;
-    //    adapterTrimmingStage(adapterTrimmingParams, *reads, generalStats);
-    //    qualityTrimmingStage(qualityTrimmingParams, *reads, generalStats);
-    //    postprocessingStage(processingParams, *reads, generalStats);
-    //    return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, generalStats));
-    //};
+    auto transformer2 = [&](auto reads){
+        GeneralStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
+        generalStats.readCount = reads->size();
+        preprocessingStage(processingParams, *reads, generalStats);
+        if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, generalStats) != 0)
+            std::cerr << "DemultiplexingStage error" << std::endl;
+        adapterTrimmingStage(adapterTrimmingParams, *reads, generalStats);
+        qualityTrimmingStage(qualityTrimmingParams, *reads, generalStats);
+        postprocessingStage(processingParams, *reads, generalStats);
+        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, generalStats));
+    };
 
 
     TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
@@ -1311,14 +1313,14 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     {
         if (programParams.ordered)
         {
-            auto ptc_unit = ptc::ordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
+            auto ptc_unit = ptc::ordered_ptc(readReader, transformer2, readWriter, programParams.num_threads);
             ptc_unit->start();
             auto f = ptc_unit->get_future();
             stats = f.get();
         }
         else
         {
-            auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
+            auto ptc_unit = ptc::unordered_ptc(readReader, transformer2, readWriter, programParams.num_threads);
             ptc_unit->start();
             auto f = ptc_unit->get_future();
             stats = f.get();

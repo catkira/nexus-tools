@@ -88,7 +88,6 @@ namespace ptc
 
         template <typename TTransformer, typename TItemIdPair>
         static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
-            //-> std::unique_ptr<ItemIdPair_t<std::result_of_t<TTransformer(TItemIdPair)>>>
         {
             return std::move(transformer(std::move(itemIdPair)));
         }
@@ -156,7 +155,9 @@ namespace ptc
     template<typename TSource, typename TOrderPolicy, typename TWaitPolicy>
     struct Produce : private OrderManager<TOrderPolicy>
     {
-        using item_type = ItemIdPair_t<typename std::result_of_t<TSource()>::element_type>;
+        using core_item_type = typename std::result_of_t<TSource()>::element_type;
+        using item_type = ItemIdPair_t<core_item_type>;
+        //using item_type = ItemIdPair_t<typename std::result_of_t<TSource()>::element_type>;
 
     private:
         TSource& _source;
@@ -300,12 +301,11 @@ namespace ptc
     };
 
 
-    template<typename TSink, typename TOrderPolicy, typename TWaitPolicy>
+    template<typename TSink, typename TCoreItemType, typename TOrderPolicy, typename TWaitPolicy>
     struct Consume : public OrderManager<TOrderPolicy>
     {
     public:
-        using sink_item_type = typename first_argument<std::remove_reference_t<TSink>>::type::element_type;
-        using item_type = ItemIdPair_t<typename first_argument<std::remove_reference_t<TSink>>::type::element_type>;
+        using item_type = ItemIdPair_t<TCoreItemType>;
         using ownSink = std::is_same<TSink, std::remove_reference_t<TSink>>;    // not used
     private:
         TSink& _sink;
@@ -435,9 +435,14 @@ namespace ptc
     private:
         // main thread variables
         using Produce_t = Produce<TSource, TOrderPolicy, TWaitPolicy>;
+        using produce_core_item_type = typename Produce_t::core_item_type;
+        produce_core_item_type test;
         Produce_t _producer;
+
         TTransformer _transformer;
-        using Consume_t = Consume<TSink, TOrderPolicy, TWaitPolicy>;
+        using transform_core_item = typename std::result_of_t<std::decay_t<TTransformer>(std::unique_ptr<produce_core_item_type>)>::element_type;
+        
+        using Consume_t = Consume<TSink, transform_core_item, TOrderPolicy, TWaitPolicy>;
         Consume_t _consumer;
         std::vector<std::thread> _threads;
 
