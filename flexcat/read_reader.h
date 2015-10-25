@@ -30,7 +30,7 @@ public:
         }
         loadMultiplex(*item, _programParams.records, _inputFileStreams.fileStreamMultiplex);
         _numReads += item->size();
-        if (item->empty() || _numReads >= _programParams.firstReads)    // no more reads available or maximum read number reached -> dont do further reads
+        if (item->empty() || _numReads > _programParams.firstReads)    // no more reads available or maximum read number reached -> dont do further reads
             item.release();
         return std::move(item);
     }

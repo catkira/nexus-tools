@@ -112,6 +112,10 @@ void ArgumentParserBuilder::addGeneralOptions(seqan::ArgumentParser & parser)
         "nq", "noQualities", "Force .fa format for output files.");
         addOption(parser, noQualOpt);
 
+    seqan::ArgParseOption orderedOpt = seqan::ArgParseOption(
+        "od", "ordered", "Keep reads in order. Needs -r 1 option to work properly.");
+    addOption(parser, orderedOpt);
+
 	seqan::ArgParseOption firstReadsOpt = seqan::ArgParseOption(
 			"fr", "reads", "Process only first n reads.",
 			seqan::ArgParseOption::INTEGER, "VALUE");
@@ -700,8 +704,9 @@ struct ProgramParams
     unsigned int firstReads;
     unsigned records;
     unsigned int num_threads;
+    bool ordered;
 
-    ProgramParams() : fileCount(0), showSpeed(false), firstReads(0), records(0), num_threads(0) {};
+    ProgramParams() : fileCount(0), showSpeed(false), firstReads(0), records(0), num_threads(0), ordered(false) {};
 };
 
 
@@ -924,6 +929,7 @@ int loadProgramParams(seqan::ArgumentParser const & parser, ProgramParams& param
     omp_set_num_threads(params.num_threads);
 
     getOptionValue(params.records, parser, "r");
+    getOptionValue(params.ordered, parser, "od");
     return 0;
 }
 
@@ -1303,10 +1309,20 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
     if (programParams.num_threads > 1)
     {
-        auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
-        ptc_unit->start();
-        auto f = ptc_unit->get_future();
-        stats = f.get();
+        if (programParams.ordered)
+        {
+            auto ptc_unit = ptc::ordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
+            ptc_unit->start();
+            auto f = ptc_unit->get_future();
+            stats = f.get();
+        }
+        else
+        {
+            auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
+            ptc_unit->start();
+            auto f = ptc_unit->get_future();
+            stats = f.get();
+        }
         //while (!ptc_unit.finished()) // shortcut is used most of the time -> xxx.idle() get called only after eof is set
         //{
         //    std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -1587,6 +1603,10 @@ int flexcatMain(int argc, char const ** argv)
             std::cout << "\tForce no-quality output: NO\n";
         }
         std::cout << "\tNumber of threads: " << programParams.num_threads << "\n";
+        if (programParams.ordered)
+            std::cout << "\tOrder policy: ordered" << std::endl;
+        else
+            std::cout << "\tOrder policy: unordered" << std::endl;
         if(flexiProgram == ADAPTER_REMOVAL || flexiProgram == QUALITY_CONTROL|| flexiProgram == ALL_STEPS)
         {
             if (isSet(parser, "t"))

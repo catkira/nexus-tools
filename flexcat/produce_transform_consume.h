@@ -107,26 +107,25 @@ namespace ptc
 
         OrderManager(const unsigned int numSlots) : id(0), _numSlots(numSlots) {};
         template <typename TItem>
-        auto appendOrderId(TItem item) -> mypair<TItem, id_t>*
-        {
-            auto current_id = id.load(std::memory_order_relaxed);
+        auto appendOrderId(TItem item) -> mypair<TItem, id_t>*        {
+            // can used relaxed here, because this function is always called
+            // from the same thread
+            auto current_id = id.load(std::memory_order_relaxed);   
             //std::cout << "start id: " << current_id << std::endl;
             id.fetch_add(1, std::memory_order_relaxed);
             return new mypair<TItem, id_t>(item, current_id);
         }
+
         template <typename TItem>
         auto extractItem(std::unique_ptr<TItem>&& itemIdPair) 
         {
             std::unique_ptr<std::remove_pointer_t<typename TItem::first_type>> temp(itemIdPair->first);
             return std::move(temp);
         }
+
         template <typename TNewItem>
         bool accept_item(TNewItem&& newItem) const noexcept {
-            //if ((newItem->second - id.load()) < (_numSlots))
-            //    std::cout << " ->";
-            //std::cout << " item id: " << newItem->second << " next id:" << id.load();
-            //std::cout << std::endl;
-            return (newItem->second - id.load(std::memory_order_relaxed)) < _numSlots;
+            return (newItem->second - id.load(std::memory_order_acquire)) < _numSlots;
         }
 
         template <typename TItem>
@@ -134,14 +133,14 @@ namespace ptc
         {
             if (item != nullptr && item->second == id.load(std::memory_order_relaxed))
             {
-                id.fetch_add(1, std::memory_order_relaxed);
+                id.fetch_add(1, std::memory_order_release);
                 return true;
             }
             return false;
         }
+
         template <typename TTransformer, typename TItemIdPair>
-        static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair) 
-        {
+        static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair) {
             std::unique_ptr<std::remove_pointer_t<decltype(itemIdPair->first)>> item;
             item.reset(itemIdPair->first);
             auto& newItem = transformer(std::move(item));
@@ -271,13 +270,17 @@ namespace ptc
         bool getItem(std::unique_ptr<item_type>& returnItem, const TConsumer& consumer) noexcept
         {
             item_type* temp = nullptr;
+            bool nothingToDo = true;
             while (true)
             {
+                nothingToDo = true;
                 bool eof = _eof.load(std::memory_order_acquire);
                 for (auto& item : _tlsItems)
                 {
                     if ((temp = item.load(std::memory_order_relaxed)) != nullptr)
                     {
+                        // keep spinning if item is available, but was not accepted because of order policy
+                        nothingToDo = false;
                         if (consumer.accept_item(temp) && item.compare_exchange_strong(temp, nullptr, std::memory_order_relaxed))
                         {
                             returnItem.reset(temp);
@@ -289,10 +292,7 @@ namespace ptc
                 //std::cout << std::this_thread::get_id() << "-2" << std::endl;
                 if (eof) // only return if _eof == true AND all the slots are empty -> therefore read eof BEFORE checking the slots
                     return false;
-                // disable semaphore wait for ordered mode, because it causes spurious stalls if items dont get accepted
-                if(std::is_same<TOrderPolicy,OrderPolicy::Ordered>::value && std::is_same<TWaitPolicy, WaitPolicy::Semaphore>::value)
-                    waitForItem(WaitPolicy::Spin());
-                else
+                if (nothingToDo)
                     waitForItem(TWaitPolicy());
             }
             return false;
