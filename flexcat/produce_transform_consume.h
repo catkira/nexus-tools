@@ -62,6 +62,7 @@ namespace ptc
     struct OrderManager<OrderPolicy::Unordered>
     {
     public:
+        OrderManager(unsigned int) {};
         template <typename TItem>
         using ItemIdPair_t = TItem;
 
@@ -75,15 +76,16 @@ namespace ptc
         {
             return std::move(item);
         }
-        template <typename TItem, typename TNewItem>
-        bool accept_item(TItem item, TNewItem&& newItem, const unsigned int numSlots) noexcept {
-            return item == nullptr;
+        template <typename TNewItem>
+        bool accept_item(TNewItem&&) const noexcept {
+            return true;
         }
 
         template <typename TItem>
         bool is_next_item(TItem item){
             return item != nullptr;
         }
+
         template <typename TTransformer, typename TItemIdPair>
         auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
             //-> std::unique_ptr<ItemIdPair_t<std::result_of_t<TTransformer(TItemIdPair)>>>
@@ -98,16 +100,17 @@ namespace ptc
     private:
         using id_t = unsigned int;
         std::atomic<id_t> id;
+        unsigned int _numSlots;
     public:
         template <typename TItem>
         using ItemIdPair_t = mypair<TItem*, id_t>;
 
-        OrderManager() : id(0) {};
+        OrderManager(const unsigned int numSlots) : id(0), _numSlots(numSlots) {};
         template <typename TItem>
         auto appendOrderId(TItem item) -> mypair<TItem, id_t>*
         {
             auto current_id = id.load();
-            std::cout << "start id: " << current_id << std::endl;
+            //std::cout << "start id: " << current_id << std::endl;
             id.fetch_add(1);
             return new mypair<TItem, id_t>(item, current_id);
         }
@@ -117,19 +120,15 @@ namespace ptc
             std::unique_ptr<std::remove_pointer_t<typename TItem::first_type>> temp(itemIdPair->first);
             return std::move(temp);
         }
-        template <typename TItem, typename TNewItem>
-        bool accept_item(TItem item, TNewItem&& newItem, const unsigned int numSlots) noexcept {
-            if (item == nullptr)
-            {
-                std::cout << "next id:" << id.load() << " current id: " << newItem->second;
-                if ((newItem->second - id.load()) < (numSlots))
-                    std::cout << " -> accept";
-                std::cout << std::endl;
-                int a = 0;
-            }
-
-            return item == nullptr && (newItem->second - id.load())<(numSlots);
+        template <typename TNewItem>
+        bool accept_item(TNewItem&& newItem) const noexcept {
+            //if ((newItem->second - id.load()) < (_numSlots))
+            //    std::cout << " ->";
+            //std::cout << " item id: " << newItem->second << " next id:" << id.load();
+            //std::cout << std::endl;
+            return (newItem->second - id.load()) < _numSlots;
         }
+
         template <typename TItem>
         bool is_next_item(TItem item)
         {
@@ -162,6 +161,7 @@ namespace ptc
 
     private:
         TSource& _source;
+        unsigned int _numSlots;
         std::vector<std::atomic<item_type*>> _tlsItems;
         std::thread _thread;
         std::atomic_bool _eof;
@@ -188,6 +188,7 @@ namespace ptc
         void waitForItem(WaitPolicy::Semaphore) {
             itemAvailableSemaphore.wait();
         }
+        void waitForItem(WaitPolicy::Spin) {};
 
         void waitForSlot(WaitPolicy::Sleep) {
             std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
@@ -198,8 +199,8 @@ namespace ptc
 
 
     public:
-        Produce(TSource& source, unsigned int sleepMS = defaultSleepMS)
-            : _source(source), _eof(false), _sleepMS(sleepMS)
+        Produce(TSource& source, const unsigned int numSlots, const unsigned int sleepMS = defaultSleepMS)
+            : OrderManager(numSlots), _source(source), _numSlots(numSlots), _eof(false), _sleepMS(sleepMS)
         {
             for (auto& item : _tlsItems)
                 item.store(nullptr);  // fill initialization does not work for atomics
@@ -209,7 +210,7 @@ namespace ptc
             if (_thread.joinable())
                 _thread.join();
         }
-        void start(const unsigned int numSlots)
+        void start()
         {
             /*
             - check if empty slot is available, if yes, read data into it
@@ -217,7 +218,7 @@ namespace ptc
             - return from thread if eof == true
             - go to sleep if no free slot is available
             */
-            _tlsItems = std::vector<std::atomic<item_type*>>(numSlots); // can not use resize, because TItem is not copyable if it contains unique_ptr
+            _tlsItems = std::vector<std::atomic<item_type*>>(_numSlots); // can not use resize, because TItem is not copyable if it contains unique_ptr
             _thread = std::thread([this]()
             {
                 bool noEmptySlot = true;
@@ -266,7 +267,8 @@ namespace ptc
         - check if eof is reached, if yes return false
         - go to sleep until data is available
         */
-        bool getItem(std::unique_ptr<item_type>& returnItem) noexcept
+        template <typename TConsumer>
+        bool getItem(std::unique_ptr<item_type>& returnItem, const TConsumer& consumer) noexcept
         {
             item_type* temp = nullptr;
             while (true)
@@ -276,7 +278,7 @@ namespace ptc
                 {
                     if ((temp = item.load(std::memory_order_relaxed)) != nullptr)
                     {
-                        if (item.compare_exchange_strong(temp, nullptr, std::memory_order_relaxed))
+                        if (consumer.accept_item(temp) && item.compare_exchange_strong(temp, nullptr, std::memory_order_relaxed))
                         {
                             returnItem.reset(temp);
                             signalSlotAvailable(TWaitPolicy());
@@ -287,7 +289,11 @@ namespace ptc
                 //std::cout << std::this_thread::get_id() << "-2" << std::endl;
                 if (eof) // only return if _eof == true AND all the slots are empty -> therefore read eof BEFORE checking the slots
                     return false;
-                waitForItem(TWaitPolicy());
+                // disable semaphore wait for ordered mode, because it causes spurious stalls if items dont get accepted
+                if(std::is_same<TOrderPolicy,OrderPolicy::Ordered>::value && std::is_same<TWaitPolicy, WaitPolicy::Semaphore>::value)
+                    waitForItem(WaitPolicy::Spin());
+                else
+                    waitForItem(TWaitPolicy());
             }
             return false;
         };
@@ -303,6 +309,7 @@ namespace ptc
         using ownSink = std::is_same<TSink, std::remove_reference_t<TSink>>;    // not used
     private:
         TSink& _sink;
+        unsigned int _numSlots;
         std::vector<std::atomic<item_type*>> _tlsItems;
         std::thread _thread;
         std::atomic_bool _run;
@@ -322,6 +329,7 @@ namespace ptc
             std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));}
         void waitForItem(WaitPolicy::Semaphore) {
             itemAvailableSemaphore.wait();}
+        void waitForItem(WaitPolicy::Spin) {};
 
         void waitForSlot(WaitPolicy::Sleep) {
             std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));}
@@ -330,8 +338,8 @@ namespace ptc
 
 
     public:
-        Consume(TSink&& sink, unsigned int sleepMS = defaultSleepMS)
-            : _sink(sink), _run(false), _sleepMS(sleepMS)
+        Consume(TSink&& sink, const unsigned int numSlots, const unsigned int sleepMS = defaultSleepMS)
+            : OrderManager(numSlots), _sink(sink), _numSlots(numSlots), _run(false), _sleepMS(sleepMS)
         {
             for (auto& item : _tlsItems)
                 item.store(nullptr);  // fill initialization does not work for atomics
@@ -350,10 +358,10 @@ namespace ptc
             return _sink.get_result();
         }
 
-        void start(const unsigned int numSlots)
+        void start()
         {
             _run = true;
-            _tlsItems = std::vector<std::atomic<item_type*>>(numSlots);
+            _tlsItems = std::vector<std::atomic<item_type*>>(_numSlots);
             _thread = std::thread([this]()
             {
                 std::unique_ptr<item_type> currentItemIdPair;
@@ -386,12 +394,11 @@ namespace ptc
         template <typename TItem>
         void pushItem(TItem&& newItem)     // blocks until item could be added
         {
-            const auto numSlots = _tlsItems.size();
             while (true)
             {
                 for (auto& item : _tlsItems)
                 {
-                    if (accept_item(item.load(std::memory_order_relaxed), newItem, numSlots))
+                    if (item.load(std::memory_order_relaxed) == nullptr)
                     {
                         typename TItem::element_type* temp = nullptr;
                         if (item.compare_exchange_strong(temp, newItem.get(), std::memory_order_acq_rel))  // acq_rel to make sure, that idle does not return true before all reads are written
@@ -436,18 +443,18 @@ namespace ptc
 
     public:
         PTC_unit(TSource& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads) :
-            _producer(source), _transformer(transformer), _consumer(std::forward<TSink>(sink)), _threads(numThreads){};
+            _producer(source, numThreads+1), _transformer(transformer), _consumer(std::forward<TSink>(sink), numThreads+1), _threads(numThreads){};
 
         void start()
         {
-            _producer.start(_threads.size() + 1);
-            _consumer.start(_threads.size() + 1);
+            _producer.start();
+            _consumer.start();
             for (auto& _thread : _threads)
             {
                 _thread = std::thread([this]()
                 {
                     std::unique_ptr<typename Produce_t::item_type> item;
-                    while (_producer.getItem(item))
+                    while (_producer.getItem(item, _consumer))
                     {
                         _consumer.pushItem(std::move(OrderManager<TOrderPolicy>::callTransformer(_transformer, std::move(item))));
                     }
@@ -483,6 +490,12 @@ namespace ptc
 
     };
 
+    template <typename TSource, typename TTransformer, typename TSink>
+    auto ordered_ptc(TSource&& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
+    {
+        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Ordered, WaitPolicy::Semaphore>>
+            (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
+    }
 
     template <typename TSource, typename TTransformer, typename TSink>
     auto unordered_ptc(TSource&& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
