@@ -87,7 +87,7 @@ namespace ptc
         }
 
         template <typename TTransformer, typename TItemIdPair>
-        auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
+        static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
             //-> std::unique_ptr<ItemIdPair_t<std::result_of_t<TTransformer(TItemIdPair)>>>
         {
             return std::move(transformer(std::move(itemIdPair)));
@@ -109,9 +109,9 @@ namespace ptc
         template <typename TItem>
         auto appendOrderId(TItem item) -> mypair<TItem, id_t>*
         {
-            auto current_id = id.load();
+            auto current_id = id.load(std::memory_order_relaxed);
             //std::cout << "start id: " << current_id << std::endl;
-            id.fetch_add(1);
+            id.fetch_add(1, std::memory_order_relaxed);
             return new mypair<TItem, id_t>(item, current_id);
         }
         template <typename TItem>
@@ -126,15 +126,15 @@ namespace ptc
             //    std::cout << " ->";
             //std::cout << " item id: " << newItem->second << " next id:" << id.load();
             //std::cout << std::endl;
-            return (newItem->second - id.load()) < _numSlots;
+            return (newItem->second - id.load(std::memory_order_relaxed)) < _numSlots;
         }
 
         template <typename TItem>
         bool is_next_item(TItem item)
         {
-            if (item != nullptr && item->second == id.load())
+            if (item != nullptr && item->second == id.load(std::memory_order_relaxed))
             {
-                ++id;
+                id.fetch_add(1, std::memory_order_relaxed);
                 return true;
             }
             return false;
@@ -500,7 +500,7 @@ namespace ptc
     template <typename TSource, typename TTransformer, typename TSink>
     auto unordered_ptc(TSource&& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
     {
-        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Ordered, WaitPolicy::Semaphore>>
+        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Unordered, WaitPolicy::Semaphore>>
             (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
     }
 
