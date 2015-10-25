@@ -155,8 +155,7 @@ namespace ptc
     template<typename TSource, typename TOrderPolicy, typename TWaitPolicy>
     struct Produce : private OrderManager<TOrderPolicy>
     {
-        using core_item_type = typename std::result_of_t<TSource()>::element_type;
-        using item_type = ItemIdPair_t<core_item_type>;
+        using item_type = ItemIdPair_t<typename std::result_of_t<TSource()>::element_type>;
         //using item_type = ItemIdPair_t<typename std::result_of_t<TSource()>::element_type>;
 
     private:
@@ -435,13 +434,11 @@ namespace ptc
     private:
         // main thread variables
         using Produce_t = Produce<TSource, TOrderPolicy, TWaitPolicy>;
-        using produce_core_item_type = typename Produce_t::core_item_type;
         produce_core_item_type test;
         Produce_t _producer;
 
         TTransformer _transformer;
-        using transform_core_item = typename std::result_of_t<std::decay_t<TTransformer>(std::unique_ptr<produce_core_item_type>)>::element_type;
-        
+        using Consume_t = Consume<TSink, TOrderPolicy, TWaitPolicy>;
         using Consume_t = Consume<TSink, transform_core_item, TOrderPolicy, TWaitPolicy>;
         Consume_t _consumer;
         std::vector<std::thread> _threads;
