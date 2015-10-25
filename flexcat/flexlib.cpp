@@ -1294,16 +1294,18 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     //    return std::move(item);
     //};
 
-    auto transformer2 = [&](auto reads){
+    auto transformer2 = [&](auto&& reads){
         GeneralStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
-        generalStats.readCount = reads->size();
-        preprocessingStage(processingParams, *reads, generalStats);
-        if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, generalStats) != 0)
+        generalStats.readCount = reads.size();
+        preprocessingStage(processingParams, reads, generalStats);
+        if (demultiplexingStage(demultiplexingParams, reads, esaFinder, generalStats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
-        adapterTrimmingStage(adapterTrimmingParams, *reads, generalStats);
-        qualityTrimmingStage(qualityTrimmingParams, *reads, generalStats);
-        postprocessingStage(processingParams, *reads, generalStats);
-        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, generalStats));
+        adapterTrimmingStage(adapterTrimmingParams, reads, generalStats);
+        qualityTrimmingStage(qualityTrimmingParams, reads, generalStats);
+        postprocessingStage(processingParams, reads, generalStats);
+        auto ret = std::make_unique<std::remove_reference_t<decltype(reads)>>(std::move(reads));
+        //*ret = std::move(reads);
+        return std::make_unique<std::tuple<std::unique_ptr<std::remove_reference_t<decltype(reads)>>, decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(ret), demultiplexingParams.barcodeIds, generalStats));
     };
 
 
