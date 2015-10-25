@@ -63,7 +63,7 @@
 #include "read_reader.h"
 #include "read_writer.h"
 #include "read_processor.h"
-#include "produce_transform_consume.h"
+#include "ptc.h"
 
 // Global variables are evil, this is for adaption and should be removed
 // after refactorization.
