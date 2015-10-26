@@ -89,7 +89,7 @@ namespace ptc
         template <typename TTransformer, typename TItemIdPair>
         static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
         {
-            return std::move(transformer(std::move(*itemIdPair)));
+            return std::move(transformer(std::move(itemIdPair)));
         }
     };
 
@@ -142,7 +142,7 @@ namespace ptc
         static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair) {
             std::unique_ptr<std::remove_pointer_t<decltype(itemIdPair->first)>> item;
             item.reset(itemIdPair->first);
-            auto& newItem = transformer(std::move(*item));
+            auto& newItem = transformer(std::move(item));
             std::unique_ptr<ItemIdPair_t<typename std::remove_reference_t<decltype(newItem)>::element_type>> newItemIdPair;
             newItemIdPair.reset(reinterpret_cast<ItemIdPair_t<typename std::remove_reference_t<decltype(newItem)>::element_type>*>(itemIdPair.release()));
             newItemIdPair->first = newItem.release();
@@ -380,7 +380,7 @@ namespace ptc
 
                             //std::this_thread::sleep_for(std::chrono::milliseconds(1));  // used for debuggin slow hd case
                             auto temp = extractItem(std::move(currentItemIdPair));
-                            _sink(std::move(*temp));
+                            _sink(std::move(temp));
                         }
                     }
                     if (nothingToDo)
@@ -440,7 +440,7 @@ namespace ptc
         Produce_t _producer;
 
         TTransformer _transformer;
-        using transform_core_item = typename std::result_of_t<std::decay_t<TTransformer>(produce_core_item_type)>::element_type;
+        using transform_core_item = typename std::result_of_t<TTransformer(std::unique_ptr<produce_core_item_type>)>::element_type;
         
         using Consume_t = Consume<TSink, transform_core_item, TOrderPolicy, TWaitPolicy>;
         Consume_t _consumer;

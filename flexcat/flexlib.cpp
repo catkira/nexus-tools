@@ -1226,38 +1226,28 @@ unsigned int readReads(std::vector<TRead<TSeq>>& reads, const unsigned int recor
 
 
 // strange bug probably in visual studio, this is not working, but the lambda works
-template <typename TRead, typename TFinder>
+template <typename TFinder>
 struct ReadTransformer
 {
-    using TpReads = std::unique_ptr<std::vector<TRead>>;
-
     ReadTransformer(const ProgramParams& programParams, const ProcessingParams& processingParams, const DemultiplexingParams& demultiplexingParams, const AdapterTrimmingParams& adapterTrimmingParams,
         const QualityTrimmingParams& qualityTrimmingParams, TFinder &finder) : 
         _programParams(programParams), _processingParams(processingParams), _demultiplexingParams(demultiplexingParams),
         _adapterTrimmingParams(adapterTrimmingParams), _qualityTrimmingParams(qualityTrimmingParams), _finder(finder){};
 
-    auto operator()(std::unique_ptr<std::vector<TRead>> reads)
+    template <typename TItem>
+    auto operator()(TItem&& reads)
     {
         GeneralStats generalStats(length(_demultiplexingParams.barcodeIds) + 1, _adapterTrimmingParams.adapters.size());
-        generalStats.readCount = reads->size();
-        
-        // Preprocessing and Filtering
-        preprocessingStage(_processingParams, *reads, generalStats);
-
-        // Demultiplexing
-        if (demultiplexingStage(_demultiplexingParams, *reads, _finder, generalStats) != 0)
+        generalStats.readCount = reads.size();
+        preprocessingStage(_processingParams, reads, generalStats);
+        if (demultiplexingStage(_demultiplexingParams, reads, _finder, generalStats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
+        adapterTrimmingStage(_adapterTrimmingParams, reads, generalStats);
+        qualityTrimmingStage(_qualityTrimmingParams, reads, generalStats);
+        postprocessingStage(_processingParams, reads, generalStats);
 
-        // Adapter trimming
-        adapterTrimmingStage(_adapterTrimmingParams, *reads, generalStats);
-
-        // Quality trimming
-        qualityTrimmingStage(_qualityTrimmingParams, *reads, generalStats);
-
-        // Postprocessing
-        postprocessingStage(_processingParams, *reads, generalStats);
-
-        return std::make_unique<std::tuple<decltype(reads), decltype(_demultiplexingParams.barcodeIds ), decltype(generalStats) >>(std::make_tuple(std::move(reads), _demultiplexingParams.barcodeIds, generalStats));
+        auto ret = std::make_unique<std::remove_reference_t<decltype(reads)>>(std::move(reads));
+        return std::make_unique<std::tuple<std::unique_ptr<std::remove_reference_t<decltype(reads)>>, decltype(_demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(ret), _demultiplexingParams.barcodeIds, generalStats));
     }
 private:
     const ProgramParams& _programParams;
@@ -1277,10 +1267,10 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     using TReadReader = ReadReader<TRead, TSeq, ProgramParams, InputFileStreams>;
     TReadReader readReader(inputFileStreams, programParams);
 
-    using TTransformer = ReadTransformer<TRead<TSeq>, TEsaFinder>;
+    using TTransformer = ReadTransformer<TEsaFinder>;
     TTransformer transformer(programParams, processingParams, demultiplexingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder);
 
-    using TReadWriter = ReadWriter<TRead, TSeq, OutputStreams, ProgramParams>;
+    using TReadWriter = ReadWriter<OutputStreams, ProgramParams>;
     TReadWriter readWriter(outputStreams, programParams);
 
     //unsigned int numReads = 0;
@@ -1294,18 +1284,16 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     //    return std::move(item);
     //};
 
-    auto transformer2 = [&](auto&& reads){
+    auto transformer2 = [&](auto reads){
         GeneralStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
-        generalStats.readCount = reads.size();
-        preprocessingStage(processingParams, reads, generalStats);
-        if (demultiplexingStage(demultiplexingParams, reads, esaFinder, generalStats) != 0)
+        generalStats.readCount = reads->size();
+        preprocessingStage(processingParams, *reads, generalStats);
+        if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, generalStats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
-        adapterTrimmingStage(adapterTrimmingParams, reads, generalStats);
-        qualityTrimmingStage(qualityTrimmingParams, reads, generalStats);
-        postprocessingStage(processingParams, reads, generalStats);
-        auto ret = std::make_unique<std::remove_reference_t<decltype(reads)>>(std::move(reads));
-        //*ret = std::move(reads);
-        return std::make_unique<std::tuple<std::unique_ptr<std::remove_reference_t<decltype(reads)>>, decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(ret), demultiplexingParams.barcodeIds, generalStats));
+        adapterTrimmingStage(adapterTrimmingParams, *reads, generalStats);
+        qualityTrimmingStage(qualityTrimmingParams, *reads, generalStats);
+        postprocessingStage(processingParams, *reads, generalStats);
+        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, generalStats));
     };
 
 
@@ -1347,7 +1335,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
             if (numReadsRead == 0)
                 break;
 
-            auto res = transformer(std::move(readSet));
+            auto res = transformer(std::move(*readSet));
             generalStats += std::get<2>(*res);
 
             t1 = std::chrono::steady_clock::now();
