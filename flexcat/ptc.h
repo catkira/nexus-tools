@@ -54,8 +54,6 @@ namespace ptc
 
     template <typename TOrderPolicy>
     struct OrderManager{
-        template <typename TItem>
-        using ItemIdPair_t = TItem;
     };
 
     template<>
@@ -63,6 +61,7 @@ namespace ptc
     {
     public:
         OrderManager(unsigned int) {};
+
         template <typename TItem>
         using ItemIdPair_t = TItem;
 
@@ -87,7 +86,7 @@ namespace ptc
         }
 
         template <typename TTransformer, typename TItemIdPair>
-        static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair)
+        static auto callTransformer(const TTransformer& transformer, TItemIdPair&& itemIdPair)
         {
             return std::move(transformer(std::move(itemIdPair)));
         }
@@ -105,6 +104,7 @@ namespace ptc
         using ItemIdPair_t = mypair<TItem*, id_t>;
 
         OrderManager(const unsigned int numSlots) : id(0), _numSlots(numSlots) {};
+
         template <typename TItem>
         auto appendOrderId(TItem item) -> mypair<TItem, id_t>*        {
             // can used relaxed here, because this function is always called
@@ -138,8 +138,8 @@ namespace ptc
         }
 
         template <typename TTransformer, typename TItemIdPair>
-        static auto callTransformer(TTransformer& transformer, TItemIdPair&& itemIdPair) {
-            auto& newItem = transformer(std::move(std::unique_ptr<std::remove_pointer_t<decltype(itemIdPair->first)>>(itemIdPair->first)));
+        static auto callTransformer(const TTransformer& transformer, TItemIdPair&& itemIdPair) {
+            auto newItem = transformer(std::move(std::unique_ptr<std::remove_pointer_t<decltype(itemIdPair->first)>>(itemIdPair->first)));
             std::unique_ptr<ItemIdPair_t<typename std::remove_reference_t<decltype(newItem)>::element_type>> newItemIdPair;
             // reuse pair, avoid new call
             newItemIdPair.reset(reinterpret_cast<ItemIdPair_t<typename std::remove_reference_t<decltype(newItem)>::element_type>*>(itemIdPair.release()));
@@ -151,10 +151,10 @@ namespace ptc
 
     // reads read sets from hd and puts them into slots, waits if no free slots are available
     template<typename TSource, typename TOrderPolicy, typename TWaitPolicy>
-    struct Produce : private OrderManager<TOrderPolicy>
+    struct Produce : public OrderManager<TOrderPolicy>
     {
         using core_item_type = typename std::result_of_t<TSource()>::element_type;
-        using item_type = ItemIdPair_t<core_item_type>;
+        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<core_item_type>;
         //using item_type = ItemIdPair_t<typename std::result_of_t<TSource()>::element_type>;
 
     private:
@@ -175,7 +175,7 @@ namespace ptc
         void signalItemAvailable(const bool eof, WaitPolicy::Sleep) {}
         void signalItemAvailable(const bool eof, WaitPolicy::Semaphore){
             if (eof)  // wakeup all potentially waiting threads so that they can be joined
-                itemAvailableSemaphore.signal(_tlsItems.size());
+                itemAvailableSemaphore.signal(static_cast<int>(_tlsItems.size()));
             else
                 itemAvailableSemaphore.signal();
         }
@@ -198,7 +198,7 @@ namespace ptc
 
     public:
         Produce(TSource& source, const unsigned int numSlots, const unsigned int sleepMS = defaultSleepMS)
-            : OrderManager(numSlots), _source(source), _numSlots(numSlots), _eof(false), _sleepMS(sleepMS)
+            : OrderManager<TOrderPolicy>(numSlots), _source(source), _numSlots(numSlots), _eof(false), _sleepMS(sleepMS)
         {
             for (auto& item : _tlsItems)
                 item.store(nullptr);  // fill initialization does not work for atomics
@@ -230,7 +230,7 @@ namespace ptc
                             noEmptySlot = false;
                             auto currentItem = _source();
                             if (currentItem)
-                                item.store(appendOrderId(currentItem.release()), std::memory_order_relaxed);
+                                item.store(this->appendOrderId(currentItem.release()), std::memory_order_relaxed);
                             else
                                 _eof.store(true, std::memory_order_release);
 
@@ -303,7 +303,7 @@ namespace ptc
     struct Consume : public OrderManager<TOrderPolicy>
     {
     public:
-        using item_type = ItemIdPair_t<TCoreItemType>;
+        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<TCoreItemType>;
         using ownSink = std::is_same<TSink, std::remove_reference_t<TSink>>;    // not used
     private:
         TSink& _sink;
@@ -337,7 +337,7 @@ namespace ptc
 
     public:
         Consume(TSink&& sink, const unsigned int numSlots, const unsigned int sleepMS = defaultSleepMS)
-            : OrderManager(numSlots), _sink(sink), _numSlots(numSlots), _run(false), _sleepMS(sleepMS)
+            : OrderManager<TOrderPolicy>(numSlots), _sink(sink), _numSlots(numSlots), _run(false), _sleepMS(sleepMS)
         {
             for (auto& item : _tlsItems)
                 item.store(nullptr);  // fill initialization does not work for atomics
@@ -349,8 +349,8 @@ namespace ptc
                 _thread.join();
         }
 
-        template<typename = std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>
-        std::remove_reference_t<std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>
+        template<typename Sink = TSink, typename = decltype(&std::remove_reference_t<Sink>::get_result)(Sink)>
+        auto
         get_result()
         {
             return _sink.get_result();
@@ -369,7 +369,7 @@ namespace ptc
                     nothingToDo = true;
                     for (auto& item : _tlsItems)
                     {
-                        if (is_next_item(item.load(std::memory_order_relaxed)))
+                        if (this->is_next_item(item.load(std::memory_order_relaxed)))
                         {
                             currentItemIdPair.reset(item.load(std::memory_order_relaxed));
                             item.store(nullptr, std::memory_order_release); // make the slot free again
@@ -377,7 +377,7 @@ namespace ptc
                             nothingToDo = false;
 
                             //std::this_thread::sleep_for(std::chrono::milliseconds(1));  // used for debuggin slow hd case
-                            auto temp = extractItem(std::move(currentItemIdPair));
+                            auto temp = this->extractItem(std::move(currentItemIdPair));
                             _sink(std::move(temp));
                         }
                     }
@@ -437,7 +437,7 @@ namespace ptc
         produce_core_item_type test;
         Produce_t _producer;
 
-        TTransformer _transformer;
+        const TTransformer _transformer;
         using transform_core_item = typename std::result_of_t<TTransformer(std::unique_ptr<produce_core_item_type>)>::element_type;
         
         using Consume_t = Consume<TSink, transform_core_item, TOrderPolicy, TWaitPolicy>;
@@ -445,7 +445,7 @@ namespace ptc
         std::vector<std::thread> _threads;
 
     public:
-        PTC_unit(TSource& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads) :
+        PTC_unit(TSource& source, const TTransformer& transformer, TSink&& sink, const unsigned int numThreads) :
             _producer(source, numThreads+1), _transformer(transformer), _consumer(std::forward<TSink>(sink), numThreads+1), _threads(numThreads){};
 
         void start()
@@ -475,8 +475,8 @@ namespace ptc
             _consumer.shutDown();
         }
         
-        template <typename = std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>
-        std::future<std::remove_reference_t<std::result_of_t<decltype(&std::remove_reference_t<TSink>::get_result)(TSink)>>>
+        template <typename Sink = TSink, typename = decltype(&std::remove_reference_t<Sink>::get_result)(Sink)>
+        auto
         get_future()
         {
             auto f = std::async([this]() {
@@ -494,14 +494,14 @@ namespace ptc
     };
 
     template <typename TSource, typename TTransformer, typename TSink>
-    auto ordered_ptc(TSource&& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
+    auto ordered_ptc(TSource&& source, const TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
     {
         return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Ordered, WaitPolicy::Semaphore>>
             (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
     }
 
     template <typename TSource, typename TTransformer, typename TSink>
-    auto unordered_ptc(TSource&& source, TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
+    auto unordered_ptc(TSource&& source, const TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
     {
         return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Unordered, WaitPolicy::Semaphore>>
             (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
