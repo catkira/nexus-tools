@@ -138,22 +138,23 @@ public:
 };
 
 
-template<template<typename> class TRead, typename TSeq, typename TOutputStreams, typename TProgramParams>
+template<typename TOutputStreams, typename TProgramParams>
 struct ReadWriter
 {
 private:
-    using TItem = std::tuple < std::unique_ptr<std::vector<TRead<TSeq>>>, decltype(DemultiplexingParams::barcodeIds), GeneralStats>;
+    //using TItem = std::tuple < std::unique_ptr<std::vector<TRead<TSeq>>>, decltype(DemultiplexingParams::barcodeIds), GeneralStats>;
 
     TOutputStreams& _outputStreams;
     const TProgramParams& _programParams;
     std::chrono::time_point<std::chrono::steady_clock> _startTime;
     std::chrono::time_point<std::chrono::steady_clock> _lastScreenUpdate;
-    std::tuple_element_t<2, TItem> _stats;
+    GeneralStats _stats;
 public:
     ReadWriter(TOutputStreams& outputStreams, const TProgramParams& programParams) :
         _outputStreams(outputStreams), _programParams(programParams), _startTime(std::chrono::steady_clock::now()) {};
 
-    void operator()(std::unique_ptr<TItem> item)
+    template <typename TItem>
+    void operator()(TItem item)
     {
         const auto t1 = std::chrono::steady_clock::now();
         _outputStreams.writeSeqs(std::move(*std::get<0>(*item)), std::get<1>(*item));
@@ -173,11 +174,11 @@ public:
             _lastScreenUpdate = std::chrono::steady_clock::now();
         }
     }
-    std::tuple_element_t<2, TItem> get_result()
+    GeneralStats get_result()
     {
         return _stats;
     }
-    void getStats(std::tuple_element_t<2, TItem>& stats)
+    void getStats(GeneralStats& stats)
     {
         stats = _stats;
     }
