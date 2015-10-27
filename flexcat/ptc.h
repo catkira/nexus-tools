@@ -468,7 +468,7 @@ namespace ptc
             {
                 std::list<std::unique_ptr<item_type>> itemBuffer;
                 std::unique_ptr<item_type> currentItemIdPair;
-                while (_run.load(std::memory_order_relaxed) || !itemBuffer.empty())
+                while (true)
                 {
                     if(std::is_same<TOrderPolicy, OrderPolicy::Ordered>::value && !itemBuffer.empty())  // only in ordered mode
                     {
@@ -494,10 +494,17 @@ namespace ptc
                         }
                         signalSlotAvailable(TWaitPolicy());
                     }
-                    else if(std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value || 
-                        std::is_same<TOrderPolicy, OrderPolicy::Unordered_use_queue>::value || 
+                    /*
+                    in ordered mode only call  waitForItem if itemBuffer is empty
+                    */
+                    else if (std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value ||
+                        std::is_same<TOrderPolicy, OrderPolicy::Unordered_use_queue>::value ||
                         itemBuffer.empty())
+                    {
+                        if (!_run.load(std::memory_order_relaxed))
+                            break;
                         waitForItem(TWaitPolicy());
+                    }
                 }
             });
         }
