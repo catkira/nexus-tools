@@ -156,7 +156,7 @@ namespace ptc
             slotEmptySemaphore.signal();
         }
 
-        void signalItemAvailable(const unsigned int n, WaitPolicy::Sleep) { (void)a; }
+        void signalItemAvailable(const unsigned int n, WaitPolicy::Sleep) { (void)n; }
         void signalItemAvailable(const unsigned int n, WaitPolicy::Semaphore) {
                 itemAvailableSemaphore.signal(static_cast<int>(n));
         }
