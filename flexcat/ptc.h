@@ -58,11 +58,6 @@ namespace ptc
         template <typename TItem>
         using ItemIdPair_t = typename TItem::element_type;
 
-        template <typename TDummy>
-        inline bool has_space(const TDummy&) const noexcept{
-            return true;
-        }
-
         template <typename TItem>
         auto appendOrderId(TItem item) -> TItem
         {
@@ -73,13 +68,9 @@ namespace ptc
         {
             return std::move(item);
         }
-        template <typename TNewItem>
-        bool accept_item(TNewItem&&) const noexcept {
-            return true;
-        }
 
         template <typename TItem>
-        bool is_next_item(TItem item){
+        inline bool is_next_item(TItem item) noexcept{
             return item != nullptr;
         }
 
@@ -123,13 +114,8 @@ namespace ptc
             return std::move(itemIdPair->first);
         }
 
-        template <typename TConsumer>
-        inline bool has_space(const TConsumer& consumer) const noexcept {
-            return (id.load(std::memory_order_acquire) - consumer.getId()) <= _numSlots;
-        }
-
         template <typename TItem>
-        bool is_next_item(TItem item)
+        inline bool is_next_item(TItem item)
         {
             if (item != nullptr && item->second == id.load(std::memory_order_relaxed))
             {
