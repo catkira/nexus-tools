@@ -29,6 +29,7 @@ namespace ptc
     namespace OrderPolicy
     {
         struct Unordered {};
+        struct Unordered_use_queue {};
         struct Ordered {};
     }
 
@@ -134,6 +135,12 @@ namespace ptc
             newItemIdPair->first = std::move(newItem);
             return std::move(newItemIdPair);
         }
+    };
+
+    template<>
+    struct OrderManager<OrderPolicy::Unordered_use_queue> : public OrderManager<OrderPolicy::Unordered>
+    {
+        OrderManager(const unsigned int numSlots) : OrderManager<OrderPolicy::Unordered>(numSlots) {};
     };
 
     struct WaitManager
@@ -311,11 +318,11 @@ namespace ptc
     };
 
     // note: using a slot for unordered mode is marginally faster than using a lockfree queue
-    //template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
-    //struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Unordered> : public LockfreeQueue<TItem, TWaitPolicy>
-    //{
-    //    ContainerSelector(const unsigned int size) : LockfreeQueue(size) {};
-    //};
+    template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
+    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Unordered_use_queue> : public LockfreeQueue<TItem, TWaitPolicy>
+    {
+        ContainerSelector(const unsigned int size) : LockfreeQueue<TItem, TWaitPolicy>(size) {};
+    };
 
     template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
     struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Ordered> : public LockfreeQueue<TItem, TWaitPolicy>
@@ -466,7 +473,9 @@ namespace ptc
                         }
                         signalSlotAvailable(TWaitPolicy());
                     }
-                    else if(std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value || itemBuffer.empty())
+                    else if(std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value || 
+                        std::is_same<TOrderPolicy, OrderPolicy::Unordered_use_queue>::value || 
+                        itemBuffer.empty())
                         waitForItem(TWaitPolicy());
                 }
             });
@@ -531,6 +540,10 @@ namespace ptc
             _consumer.shutDown();
         }
         
+        /*
+        This function will only be enabled, if the Consumer functor has a get_result() function. 
+        So obviously, you can not get a future if you use a lambda as sink :)
+        */
         template <typename Sink = TSink, typename = decltype(&std::remove_reference_t<Sink>::get_result)(Sink)>
         auto
         get_future()
@@ -549,6 +562,9 @@ namespace ptc
 
     };
 
+    /*
+    Some convenience wrappers, same fashion like std::string
+    */
     template <typename TSource, typename TTransformer, typename TSink>
     auto ordered_ptc(TSource&& source, const TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
     {
@@ -563,4 +579,10 @@ namespace ptc
             (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
     }
 
+    template <typename TSource, typename TTransformer, typename TSink>
+    auto unordered_use_queue_ptc(TSource&& source, const TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
+    {
+        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Unordered_use_queue, WaitPolicy::Semaphore>>
+            (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
+    }
 }
