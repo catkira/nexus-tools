@@ -27,10 +27,10 @@ flexcat_er = "0.2";
 flexcat_ol = "4";
 flexcat_fm = "13";
 flexcat_ml = "13";
-flexcat_oh = "0";
-flexcat_times = "1";
+flexcat_oh = "4";
+flexcat_times = "5";
 script_path = os.path.dirname(os.path.realpath(__file__))
-flexcatAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
+flexcatAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters_best_short.fa";
 flexcatBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
 
