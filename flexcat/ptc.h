@@ -460,7 +460,7 @@ namespace ptc
                         }
                         signalSlotAvailable(TWaitPolicy());
                     }
-                    else 
+                    else if(std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value || itemBuffer.empty())
                         waitForItem(TWaitPolicy());
                 }
             });
