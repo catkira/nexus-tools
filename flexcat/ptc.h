@@ -1,7 +1,8 @@
 // ==========================================================================
 // Author: Benjamin Menkuec <benjamin@menkuec.de>
+// Copyright 2015, Benjamin Menkuec
 // License: LGPL
-// dont remove this notices
+// dont remove this comment
 // ==========================================================================
 #pragma once
 
@@ -11,7 +12,7 @@
 
 #include <boost/lockfree/queue.hpp>
 
-#include "semaphore.h"
+#include "semaphore.h"  // by jeff preshing
 
 namespace ptc
 {
@@ -60,18 +61,18 @@ namespace ptc
         using ItemIdPair_t = typename TItem::element_type;
 
         template <typename TItem>
-        auto appendOrderId(TItem item) -> TItem
+        inline auto appendOrderId(TItem&& item) const noexcept
         {
-            return item;
+            return std::forward<TItem>(item);
         }
         template <typename TItem>
-        auto extractItem(TItem&& item) -> TItem
+        inline auto extractItem(TItem&& item) const noexcept
         {
-            return std::move(item);
+            return std::forward<TItem>(item);
         }
 
         template <typename TItem>
-        inline bool is_next_item(TItem item) noexcept{
+        inline bool is_next_item(TItem item) const noexcept{
             return item != nullptr;
         }
 
@@ -88,7 +89,7 @@ namespace ptc
     private:
         using id_t = unsigned int;
         std::atomic<id_t> id;
-        unsigned int _numSlots;
+        const unsigned int _numSlots;
     public:
         template <typename TItem>
         using ItemIdPair_t = mypair<TItem, id_t>;
@@ -104,19 +105,18 @@ namespace ptc
             // can used relaxed here, because this function is always called
             // from the same thread
             auto current_id = id.load(std::memory_order_relaxed);   
-            //std::cout << "start id: " << current_id << std::endl;
             id.fetch_add(1, std::memory_order_relaxed);
             return std::make_unique<mypair<TItem, id_t>>(item, current_id);
         }
 
         template <typename TItem>
-        auto extractItem(std::unique_ptr<TItem>&& itemIdPair) 
+        inline auto extractItem(std::unique_ptr<TItem>&& itemIdPair) const noexcept
         {
             return std::move(itemIdPair->first);
         }
 
         template <typename TItem>
-        inline bool is_next_item(TItem item)
+        inline bool is_next_item(TItem item) noexcept
         {
             if (item != nullptr && item->second == id.load(std::memory_order_relaxed))
             {
@@ -130,7 +130,7 @@ namespace ptc
         static auto callTransformer(const TTransformer& transformer, TItemIdPair itemIdPair) {
             auto newItem = transformer(std::move(itemIdPair->first));
             std::unique_ptr<ItemIdPair_t<decltype(newItem)>> newItemIdPair;
-            // reuse pair, avoid new call
+            // reuse pair, avoid call to allocator which would make this function not lockfree anymore
             newItemIdPair.reset(reinterpret_cast<typename decltype(newItemIdPair)::element_type*>(itemIdPair.release()));
             newItemIdPair->first = std::move(newItem);
             return std::move(newItemIdPair);
@@ -143,60 +143,56 @@ namespace ptc
         OrderManager(const unsigned int numSlots) : OrderManager<OrderPolicy::Unordered>(numSlots) {};
     };
 
-    struct WaitManager
+    template <typename TWaitPolicy>
+    struct WaitManager{};
+
+    template <>
+    struct WaitManager<WaitPolicy::Semaphore>
     {
     private:
-        LightweightSemaphore slotEmptySemaphore;
-        LightweightSemaphore itemAvailableSemaphore;
-
-        const unsigned int _sleepMS = 10;
+        LightweightSemaphore _semaphore;
     public:
-        void signalSlotAvailable(WaitPolicy::Sleep) {}
-        void signalSlotAvailable(WaitPolicy::Semaphore) {
-            slotEmptySemaphore.signal();
+        inline void signal() noexcept {
+            _semaphore.signal();
         }
-
-        void signalItemAvailable(const unsigned int n, WaitPolicy::Sleep) { (void)n; }
-        void signalItemAvailable(const unsigned int n, WaitPolicy::Semaphore) {
-                itemAvailableSemaphore.signal(static_cast<int>(n));
+        inline void signal(const unsigned int n) noexcept {
+            _semaphore.signal(static_cast<int>(n));
         }
-        void signalItemAvailable(WaitPolicy::Sleep) {}
-        void signalItemAvailable(WaitPolicy::Semaphore) {
-            itemAvailableSemaphore.signal();
+        inline void wait() noexcept {
+            _semaphore.wait();
         }
-
-        void waitForItem(WaitPolicy::Sleep) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+        inline bool probably_available() const noexcept {
+            return _semaphore.get_count() >= 0;
         }
-        void waitForItem(WaitPolicy::Semaphore) {
-            itemAvailableSemaphore.wait();
-        }
-        void waitForItem(WaitPolicy::Spin) {};
-
-        void waitForSlot(WaitPolicy::Sleep) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
-        }
-        void waitForSlot(WaitPolicy::Semaphore) {
-            slotEmptySemaphore.wait();
-        }
-
-        bool item_probably_available(WaitPolicy::Semaphore) {
-            /*
-            count > 0 : there are more items available than can be inserted
-            count < 0 : there are more items requested than available
-            count = 0 : even (initial state)
-            */
-            return itemAvailableSemaphore.get_count() >= 0;
-        }
-        bool item_probably_available(WaitPolicy::Spin) {
-            return true;    // dont know if item is available, so always return yes
-        }
-        bool item_probably_available(WaitPolicy::Sleep) {
-            return true;    // dont know if item is available, so always return yes
-        }
-
     };
 
+    template <>
+    struct WaitManager<WaitPolicy::Sleep>
+    {
+    private:
+        const unsigned int _sleepMS = 10;
+    public:
+        inline void signal() noexcept {}
+        inline void signal(const unsigned int n) noexcept { (void)n; }
+        inline void wait() noexcept {
+            std::this_thread::sleep_for(std::chrono::milliseconds(_sleepMS));
+        }
+        inline bool probably_available() const noexcept {
+            return true;
+        }
+    };
+
+    template <>
+    struct WaitManager<WaitPolicy::Spin>
+    {
+    public:
+        inline void signal() noexcept {}
+        inline void signal(const unsigned int n) noexcept { (void)n; }
+        inline void wait() noexcept {}
+        inline bool probably_available() const noexcept {
+            return true;
+        }
+    };
 
     enum class InputPolicy
     {
@@ -208,22 +204,30 @@ namespace ptc
         single,
         multi
     };
+    enum class BlockingInsert
+    {
+        yes,
+        no
+    };
+    enum class BlockingRetrieve
+    {
+        yes,
+        no
+    };
 
-    template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
-    struct Slots : private WaitManager
+
+    template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy, 
+        BlockingInsert blockingInsert = BlockingInsert::yes, BlockingRetrieve blockingRetrieve = BlockingRetrieve::yes>
+    struct Slots
     {
     private:
         std::vector<std::atomic<TItem*>> _items;
+        WaitManager<TWaitPolicy> _slot_available;
+        WaitManager<TWaitPolicy> _item_available;
     public:
         Slots(const unsigned int numSlots) : _items(numSlots){};
 
         bool try_insert(std::unique_ptr<TItem>& insert_item) noexcept {
-            /*
-            this is a shortcut that gives a great performance boost, especially in high contention 
-            when the transformation threads are idleing
-            */
-            if (!item_probably_available(TWaitPolicy()))
-                return false;
             for (auto& item : _items)
             {
                 if (item.load(std::memory_order_relaxed) == nullptr)
@@ -231,6 +235,8 @@ namespace ptc
                     if (inputPolicy == InputPolicy::single)
                     {
                         item.store(insert_item.release(), std::memory_order_release);
+                        if(blockingRetrieve == BlockingRetrieve::yes)
+                            _item_available.signal();
                         return true;
                     }
                     else
@@ -239,6 +245,8 @@ namespace ptc
                         if (item.compare_exchange_strong(temp, insert_item.get()))
                         {
                             insert_item.release();
+                            if (blockingRetrieve == BlockingRetrieve::yes)
+                                _item_available.signal();
                             return true;
                         }
                     }
@@ -246,16 +254,23 @@ namespace ptc
             }
             return false;
         }
+        template<typename = std::enable_if_t<blockingInsert == BlockingInsert::yes>>
         void insert(std::unique_ptr<TItem> item) noexcept {
             while (true)
             {
                 if (try_insert(item))
                     return;
-                waitForSlot(TWaitPolicy());
+                _slot_available.wait();
             }
         }
+        template<typename = std::enable_if_t<blockingRetrieve == BlockingInsert::yes>>
         void retrieve(std::unique_ptr<TItem>& item) {
-            // not implemented yet
+            while (true)
+            {
+                if (try_retrieve(item))
+                    return;
+                _item_available.wait();
+            }
             return true;
         }
         bool try_retrieve(std::unique_ptr<TItem>& retrieve_item) noexcept {
@@ -268,7 +283,8 @@ namespace ptc
                     {
                         retrieve_item.reset(temp);
                         item.store(nullptr, std::memory_order_release);
-                        signalSlotAvailable(TWaitPolicy());
+                        if (blockingInsert == BlockingInsert::yes)
+                            _slot_available.signal();
                         return true;
                     }
                     else
@@ -276,7 +292,8 @@ namespace ptc
                         if (item.compare_exchange_strong(temp, nullptr, std::memory_order_release))
                         {
                             retrieve_item.reset(temp);
-                            signalSlotAvailable(TWaitPolicy());
+                            if (blockingInsert == BlockingInsert::yes)
+                                _slot_available.signal();
                             return true;
                         }
                     }
@@ -286,40 +303,52 @@ namespace ptc
         }
     };
 
-    template<typename TItem, typename TWaitPolicy>
-    struct LockfreeQueue : private WaitManager
+    template<typename TItem, typename TWaitPolicy,
+        BlockingInsert blockingInsert = BlockingInsert::yes, BlockingRetrieve blockingRetrieve = BlockingRetrieve::yes>
+    struct LockfreeQueue
     {
     private:
         boost::lockfree::queue<TItem*, boost::lockfree::fixed_sized<true>> _queue;
+        WaitManager<TWaitPolicy> _slot_available;
+        WaitManager<TWaitPolicy> _item_available;
     public:
         LockfreeQueue(const unsigned int numSlots) : _queue(numSlots) {};
 
         bool try_insert(std::unique_ptr<TItem>& insert_item) noexcept {
             if (_queue.push(insert_item.get()))
+            {
+                insert_item.release();
+                if (blockingRetrieve == BlockingRetrieve::yes)
+                    _item_available.signal();
                 return true;
+            }
             return false;
         }
+        template<typename = std::enable_if_t<blockingInsert == BlockingInsert::yes>>
         void insert(std::unique_ptr<TItem> item) noexcept {
             while (true)
             {
-                if (_queue.push(item.get()))
-                {
-                    item.release();
+                if (try_insert(item))
                     return;
-                }
-                waitForSlot(TWaitPolicy());
+                _slot_available.wait();
             }
         }
-        void retrieve(std::unique_ptr<TItem>& item) {
-            // not implemented yet
-            return true;
+        template<typename = std::enable_if_t<blockingRetrieve == BlockingRetrieve::yes>>
+        void retrieve(std::unique_ptr<TItem>& item) noexcept {
+            while (true)
+            {
+                if(try_retrieve(item))
+                    return true;
+                _item_available.wait();
+            }
         }
         bool try_retrieve(std::unique_ptr<TItem>& retrieve_item) noexcept {
             TItem* temp = nullptr;
             if (_queue.pop(temp))
             {
                 retrieve_item.reset(temp);
-                signalSlotAvailable(TWaitPolicy());
+                if (blockingInsert == BlockingInsert::yes)
+                    _slot_available.signal();
                 return true;
             }
             return false;
@@ -333,41 +362,40 @@ namespace ptc
     };
 
     template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
-    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Unordered> : public Slots<TItem, inputPolicy, outputPolicy, TWaitPolicy>
+    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Unordered> : public Slots<TItem, inputPolicy, outputPolicy, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>
     {
-        ContainerSelector(const unsigned int size) : Slots<TItem, inputPolicy, outputPolicy, TWaitPolicy>(size) {};
+        ContainerSelector(const unsigned int size) : Slots<TItem, inputPolicy, outputPolicy, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>(size) {};
     };
 
-    // note: using a slot for unordered mode is marginally faster than using a lockfree queue
+    // note: using a slot for unordered mode is a lot faster than using a lockfree queue (depending on compiler and system)
     template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
-    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Unordered_use_queue> : public LockfreeQueue<TItem, TWaitPolicy>
+    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Unordered_use_queue> : public LockfreeQueue<TItem, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>
     {
-        ContainerSelector(const unsigned int size) : LockfreeQueue<TItem, TWaitPolicy>(size) {};
+        ContainerSelector(const unsigned int size) : LockfreeQueue<TItem, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>(size) {};
     };
 
     template<typename TItem, InputPolicy inputPolicy, OutputPolicy outputPolicy, typename TWaitPolicy>
-    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Ordered> : public LockfreeQueue<TItem, TWaitPolicy>
+    struct ContainerSelector<TItem, inputPolicy, outputPolicy, TWaitPolicy, OrderPolicy::Ordered> : public LockfreeQueue<TItem, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>
     {
-        ContainerSelector(const unsigned int size) : LockfreeQueue<TItem, TWaitPolicy>(size) {};
+        ContainerSelector(const unsigned int size) : LockfreeQueue<TItem, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>(size) {};
     };
 
-
-
-    // reads read sets from hd and puts them into slots, waits if no free slots are available
-    // todo: use lockfree queue for ordered mode instead of slot
+    /*
+    reads read sets from hd and puts them into slots, waits if no free slots are available
+    */
     template<typename TSource, typename TOrderPolicy, typename TWaitPolicy>
-    struct Produce : private OrderManager<TOrderPolicy>, private WaitManager
+    struct Produce : private OrderManager<TOrderPolicy>, public WaitManager<TWaitPolicy>
     {
+    public:
         using core_item_type = typename std::result_of_t<TSource()>;
         using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<core_item_type>;
-
     private:
         ContainerSelector<item_type, InputPolicy::single, OutputPolicy::multi, TWaitPolicy, TOrderPolicy> _slots;
         TSource& _source;
-        unsigned int _numSlots;
+        const unsigned int _numSlots;
         std::thread _thread;
         std::atomic_bool _eof;
-
+    // function declarations and definitions
     public:
         Produce(TSource& source, const unsigned int numSlots)
             : OrderManager<TOrderPolicy>(numSlots), _slots(numSlots), _source(source), _numSlots(numSlots), _eof(false)
@@ -392,12 +420,12 @@ namespace ptc
                     if (!item)
                     {
                         _eof.store(true, std::memory_order_release);
-                        signalItemAvailable(_numSlots, TWaitPolicy());
+                        this->signal(_numSlots);
                         return;
                     }
                     auto insert_item = this->appendOrderId(std::move(item));
                     _slots.insert(std::move(insert_item));
-                    signalItemAvailable(TWaitPolicy());
+                    this->signal();
                 }
             });
         }
@@ -415,23 +443,21 @@ namespace ptc
         {
             while (true)
             {
-                bool eof = _eof.load(std::memory_order_acquire);
+                const bool eof = _eof.load(std::memory_order_acquire);
                 if (!_slots.try_retrieve(returnItem))
                     if (!eof)
-                        waitForItem(TWaitPolicy());
+                        wait();
                     else
                         return false;
                 else
                     return true;
-                //std::cout << std::this_thread::get_id() << "-2" << std::endl;
             }
             return false;
         };
     };
 
-
     template<typename TSink, typename TCoreItemType, typename TOrderPolicy, typename TWaitPolicy>
-    struct Consume : public OrderManager<TOrderPolicy>, private WaitManager
+    struct Consume : private OrderManager<TOrderPolicy>, private WaitManager<TWaitPolicy>
     {
     public:
         using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<TCoreItemType>;
@@ -439,10 +465,10 @@ namespace ptc
     private:
         ContainerSelector<item_type, InputPolicy::multi, OutputPolicy::single, TWaitPolicy, TOrderPolicy> _slots;
         TSink& _sink;
-        unsigned int _numSlots;
+        const unsigned int _numSlots;
         std::thread _thread;
         std::atomic_bool _run;
-
+    // function declarations and definitions
     public:
         Consume(TSink&& sink, const unsigned int numSlots)
             : OrderManager<TOrderPolicy>(numSlots), _slots(numSlots), _sink(sink), _numSlots(numSlots), _run(false)
@@ -468,7 +494,7 @@ namespace ptc
             {
                 std::list<std::unique_ptr<item_type>> itemBuffer;
                 std::unique_ptr<item_type> currentItemIdPair;
-                while (true)
+                while (_run.load(std::memory_order_relaxed) || !itemBuffer.empty())
                 {
                     if(std::is_same<TOrderPolicy, OrderPolicy::Ordered>::value && !itemBuffer.empty())  // only in ordered mode
                     {
@@ -492,32 +518,23 @@ namespace ptc
                         {
                             itemBuffer.emplace_back(std::move(currentItemIdPair));
                         }
-                        signalSlotAvailable(TWaitPolicy());
                     }
-                    /*
-                    in ordered mode only call  waitForItem if itemBuffer is empty
-                    */
-                    else if (std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value ||
-                        std::is_same<TOrderPolicy, OrderPolicy::Unordered_use_queue>::value ||
+                    else if(std::is_same<TOrderPolicy, OrderPolicy::Unordered>::value || 
+                        std::is_same<TOrderPolicy, OrderPolicy::Unordered_use_queue>::value || 
                         itemBuffer.empty())
-                    {
-                        if (!_run.load(std::memory_order_relaxed))
-                            break;
-                        waitForItem(TWaitPolicy());
-                    }
+                        wait();
                 }
             });
         }
-        template <typename TItem>
-        void pushItem(TItem&& newItem)     // blocks until item could be added
+        void pushItem(std::unique_ptr<item_type> newItem)     // blocks until item could be added
         {
             _slots.insert(std::move(newItem));
-            signalItemAvailable(TWaitPolicy());
+            WaitManager<TWaitPolicy>::signal();
         }
         void shutDown()
         {
             _run.store(false, std::memory_order_relaxed);
-            signalItemAvailable(TWaitPolicy());
+            WaitManager<TWaitPolicy>::signal();
             if (_thread.joinable())
                 _thread.join();
         }
@@ -527,7 +544,6 @@ namespace ptc
     struct PTC_unit
     {
     private:
-        // producer needs consumer feedback in ordered mode -> slow
         using Produce_t = Produce<TSource, TOrderPolicy, TWaitPolicy>;
         using produce_core_item_type = typename Produce<TSource, TOrderPolicy, TWaitPolicy>::core_item_type;
         Produce_t _producer;
