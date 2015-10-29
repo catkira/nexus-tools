@@ -196,6 +196,14 @@ void alignPair(std::pair<unsigned, seqan::Align<TSeq> >& ret, const TSeq& seq1, 
     // banded alignment
     const int val1 = -leftOverhang;
     const int val2 = length(seq1) - length(seq2) + rightOverhang;
+    /*
+    sequence is too short, return -1
+    */
+    if (val2 < val1)
+    {
+        ret.first = -1;
+        return;
+    }
     ret.first = globalAlignment(ret.second, adapterScore, config, val1, val2, seqan::LinearGaps());
 }
 
