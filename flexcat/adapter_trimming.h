@@ -31,7 +31,7 @@
 // ==========================================================================
 // Author: Benjamin Menkuec <benjamin@menkuec.de>
 // Author: Sebastian Roskosch <serosko@zedat.fu-berlin.de>
-// ==========================================================================W
+// ==========================================================================
 
 #ifndef ADAPTERTRIMMING_H
 #define ADAPTERTRIMMING_H
@@ -143,6 +143,16 @@ struct AdapterMatchSettings
     unsigned int times;
 };
 
+
+struct AdapterTrimmingParams
+{
+    bool pairedNoAdapterFile;
+    bool run;
+    AdapterSet adapters;
+    AdapterMatchSettings mode;
+    bool tag;
+    AdapterTrimmingParams() : pairedNoAdapterFile(false), run(false), tag(false) {};
+};
 
 // ============================================================================
 // Functions
