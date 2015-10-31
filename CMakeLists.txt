@@ -7,18 +7,17 @@
 # ----------------------------------------------------------------------------
 
 project (NexusTools)
-cmake_minimum_required (VERSION 2.8.12)
 
 if(LINUX_STATIC)
-	message("building with linux static libs")
-	SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
-	SET(BUILD_SHARED_LIBRARIES OFF)
-	SET(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} " -static -static-libgcc -static-libstdc++")
+    cmake_minimum_required (VERSION 3.1)
+    message("building with linux static libs")
+    SET(CMAKE_FIND_LIBRARY_SUFFIXES ".a")
+    SET(BUILD_SHARED_LIBRARIES OFF)
+    SET(CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} " -static -static-libgcc -static-libstdc++")
     set(Boost_USE_STATIC_LIBS ON)
-    #set(LINK_SEARCH_END_STATIC ON)
     set(SEQAN_LIBRARIES ${SEQAN_LIBRARIES} "-Wl,--whole-archive -lpthread -Wl,--no-whole-archive")
 else()
-#	add_definitions (-DBOOST_ALL_DYN_LINK)
+    cmake_minimum_required (VERSION 2.8.12)
 endif(LINUX_STATIC)
 
 set (CMAKE_INCLUDE_PATH
