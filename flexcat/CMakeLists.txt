@@ -63,7 +63,6 @@ endforeach ()
 add_library (flexlib
 			 flexlib.cpp
 			 flexlib.h
-			 flexcat.h
 			 flexi_program.h
 			 ptc.h
              read.h
@@ -82,7 +81,7 @@ target_link_libraries (flexlib ${SEQAN_LIBRARIES})
 set (KNIME_FLEX_NODES sflexQC sflexAR sflexDMulti sflexFilter)
 
 foreach (TARGET ${KNIME_FLEX_NODES} flexcat)
-    add_executable (${TARGET} flexcat.cpp)
+    add_executable (${TARGET} flexcat.cpp flexcat.h)
     target_link_libraries (${TARGET} flexlib ${SEQAN_LIBRARIES})
 endforeach ()
 
