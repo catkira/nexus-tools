@@ -5,6 +5,7 @@ import os.path
 import subprocess
 import argparse
 import platform
+import multiprocessing
 
 #print 'Number of arguments:', len(sys.argv), 'arguments.'
 #print 'Argument List:', str(sys.argv)
@@ -40,7 +41,7 @@ parser.add_argument('--clean', action='store_true')
 parser.add_argument('--overwrite', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 parser.add_argument('--bowtie_location', nargs='?', default = "")
-parser.add_argument('--num_threads', nargs='?', default = "4")
+parser.add_argument('--num_threads', nargs='?', default = multiprocessing.cpu_count())
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
 parser.add_argument('--filter_chromosomes', type=str, default="")
