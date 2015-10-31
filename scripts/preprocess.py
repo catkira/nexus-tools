@@ -24,18 +24,19 @@ def indexBamFile(filename, script_path):
 		sys.exit()
 	return;
 
-flexcat_er = "0.2";
-flexcat_ol = "4";
-flexcat_fm = "13";
-flexcat_ml = "13";
-flexcat_oh = "0";
-flexcat_times = "1";
 script_path = os.path.dirname(os.path.realpath(__file__))
-flexcatAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/adapters.fa";
-flexcatBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + "/../data/barcodes.fa";
 dataDir = os.getcwd() + "/"
 
 parser = argparse.ArgumentParser(description="Preprocess fastq files and do mapping")
+parser.add_argument('--adapters', type=str, default = "/../data/adapters.fa")
+parser.add_argument('--barcodes', type=str, default = "/../data/barcodes.fa")
+parser.add_argument('--flexcat_er', type=str, default = "0.2")
+parser.add_argument('--flexcat_ol', type=str, default = "4")
+parser.add_argument('--flexcat_fm', type=str, default = "13")
+parser.add_argument('--flexcat_ml', type=str, default = "13")
+parser.add_argument('--flexcat_oh', type=str, default = "0")
+parser.add_argument('--flexcat_times', type=str, default = "1")
+
 parser.add_argument('--exo', action='store_true')
 parser.add_argument('--clean', action='store_true')
 parser.add_argument('--overwrite', action='store_true')
@@ -49,6 +50,9 @@ parser.add_argument('--random_split', action='store_true')
 parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
+
+flexcatAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + results.adapters;
+flexcatBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + results.barcodes;
 
 print "Reads: " + results.input_file
 print "Genome: " + results.genome
@@ -93,9 +97,9 @@ if(platform.system() == "Windows"):
 	flexcat_path += ".exe"
 	
 if results.exo:
- args = (flexcat_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexcat_times, "-er",flexcat_er, "-ol", flexcat_ol, "-oh", flexcat_oh, "-fm", flexcat_fm, "-ml", flexcat_ml, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
+ args = (flexcat_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", results.flexcat_times, "-er", results.flexcat_er, "-ol", results.flexcat_ol, "-oh", results.flexcat_oh, "-fm", results.flexcat_fm, "-ml", results.flexcat_ml, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
 else:
- args = (flexcat_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", flexcat_times, "-er",flexcat_er, "-ol", flexcat_ol, "-oh", flexcat_oh, "-fm", flexcat_fm, "-ml", flexcat_ml, "-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
+ args = (flexcat_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", results.flexcat_times, "-er", results.flexcat_er, "-ol", results.flexcat_ol, "-oh", results.flexcat_oh, "-fm", results.flexcat_fm, "-ml", results.flexcat_ml, "-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
  #args = ("flexcat", results.input_file, "-tl", "5","-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
