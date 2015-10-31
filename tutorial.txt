@@ -1,0 +1,30 @@
+----------------- installation -----------------
+sudo apt-get install samtools bowtie python
+cd ~
+git clone https://github.com/catkira/nexus-tools
+
+
+----------------- test run -----------------
+download the dm3 genome 
+-> www.menkuec.de/dm3.fa
+download chip-nexus reads in fastq format
+-> ftp://ftp.ddbj.nig.ac.jp/ddbj_database/dra/fastq/SRA142/SRA142150/SRX475440/SRR1175698.fastq.bz2
+run
+  ~/nexus-tools/scripts/preprocess.py [path]/SRR1175698.fastq.bz2 [path]/dm3.fa --output_dir SRR1175698 --verbose
+  
+to show all options, just call preprocess.py without arguments
+  
+
+----------------- compile from source -----------------
+sudo add-apt-repository ppa:ubuntu-toolchain-r/test
+sudo apt-get update
+sudo apt-get install gcc-5.1 g++-5.1
+
+sudo apt-get install cmake
+sudo apt-get install libboost-all-dev
+
+cd ~
+git clone -b develop https://github.com/catkira/seqan
+git clone https://github.com/catkira/nexus-tools
+cd nexus-tools
+./build_linux_release.sh
