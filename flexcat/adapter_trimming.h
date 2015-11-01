@@ -194,7 +194,7 @@ namespace AlignAlgorithm
 {
     struct NeedlemanWunsch {};
     struct Menkuec {};
-};
+}
 
 template <typename TSeq, typename TAdapter>
 void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const TAdapter& seq2, 
@@ -228,7 +228,7 @@ void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const
 */
 template <typename TSeq, typename TAdapter>
 void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const TAdapter& seq2, 
-        const int leftOverhang, const int rightOverhang, AlignAlgorithm::Menkuec&) noexcept
+        const int leftOverhang, const int rightOverhang, const AlignAlgorithm::Menkuec&) noexcept
 {
     seqan::resize(rows(ret.second), 2);
     seqan::assignSource(row(ret.second, 0), seq1);
@@ -236,14 +236,13 @@ void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const
 
     const int shiftStartPos = -leftOverhang;
     const int shiftEndPos = length(seq1) - length(seq2) + rightOverhang;
-    const unsigned int numShifts = -shiftStartPos + shiftEndPos;
     const auto lenSeq1 = length(seq1);
     const auto lenSeq2 = length(seq2);
     int shiftPos = shiftStartPos;
     int bestShiftPos = shiftStartPos;
     int bestScore = std::numeric_limits<int>::min();
     float bestErrorRate = std::numeric_limits<float>::max();
-    int bestOverlap = 0;
+    unsigned int bestOverlap = 0;
 
     if (shiftEndPos < shiftStartPos)
     {
@@ -291,7 +290,7 @@ void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const
 
 // used only for testing and paired end data
 template <typename TSeq, typename TAdapter>
-void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const TAdapter& seq2, AlignAlgorithm::NeedlemanWunsch&) noexcept
+void alignPair(std::pair<int, seqan::Align<TSeq> >& ret, const TSeq& seq1, const TAdapter& seq2, const AlignAlgorithm::NeedlemanWunsch&) noexcept
 {
     seqan::resize(rows(ret.second), 2);
     seqan::assignSource(row(ret.second, 0), seq1);
@@ -375,7 +374,6 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
     const TStripAdapterDirection&)
 {
     using TAlign = seqan::Align<TSeq>;
-    using TRow = typename seqan::Row<TAlign>::Type;
     AlignAlgorithm::Menkuec alignAlgorithm;
 
     unsigned removed{ 0 };
