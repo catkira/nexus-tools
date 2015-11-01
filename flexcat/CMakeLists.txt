@@ -78,7 +78,7 @@ add_library (flexlib
              )
 target_link_libraries (flexlib ${SEQAN_LIBRARIES})
 
-set (KNIME_FLEX_NODES flexcatQCsflexcatAR flexcatDMulti flexcatFilter)
+set (KNIME_FLEX_NODES flexcatQC flexcatAR flexcatDMulti flexcatFilter)
 
 foreach (TARGET ${KNIME_FLEX_NODES} flexcat)
     add_executable (${TARGET} flexcat.cpp flexcat.h)
