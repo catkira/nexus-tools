@@ -57,7 +57,7 @@ add_executable(test_adapter            test_adapter.cpp adapter_trimming.h)
 add_executable(test_general_processing test_general_processing.cpp general_processing.h)
 
 foreach (TEST demultiplex trimming adapter general_processing)
-    target_link_libraries (test_sflex_${TEST} ${SEQAN_LIBRARIES})
+    target_link_libraries (test_${TEST} ${SEQAN_LIBRARIES})
 endforeach ()
 
 add_library (flexlib
