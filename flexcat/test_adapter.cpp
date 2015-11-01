@@ -274,7 +274,7 @@ SEQAN_DEFINE_TEST(align_adapter_test)
 
 	TSeq seq = TSeq("AAAAAAAAAATTTTT");
 	TAda ada = TAda("TTTTTTTTTTT");
-	std::pair<unsigned, seqan::Align<TSeq> > pair;
+	std::pair<int, seqan::Align<TSeq> > pair;
     alignPair(pair, seq, ada, seqan::AlignConfig<true, true, true, true>());
 	SEQAN_ASSERT_EQ(pair.first, 5u);
 
