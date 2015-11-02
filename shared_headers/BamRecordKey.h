@@ -20,11 +20,18 @@ bool isRev(const seqan::BamAlignmentRecord &record)
 template <typename THasBarcode = NoBarcode>
 struct BamRecordKey
 {
-    BamRecordKey init(const seqan::BamAlignmentRecord &record)
+    BamRecordKey init(const seqan::BamAlignmentRecord &record) noexcept
     {
         pos = static_cast<uint64_t>(record.rID) << 32 |
             static_cast<uint64_t>((record.beginPos + static_cast<uint64_t>((isRev(record) == true ? length(record.seq) : 0)))) << 1 |
             static_cast<uint64_t>(isRev(record));
+        return *this;
+    }
+    BamRecordKey init(const unsigned int rID, const unsigned int pos5end, const bool reverseStrand) noexcept
+    {
+        pos = static_cast<uint64_t>(rID) << 32 |
+            static_cast<uint64_t>(pos5end) << 1 |
+            static_cast<uint64_t>(reverseStrand);
         return *this;
     }
     BamRecordKey(const uint64_t pos) : pos(pos) {};
