@@ -173,7 +173,7 @@ int main(int argc, char const * argv[])
     readHeader(header, bamFileIn);
     const auto chromosomeFilterSet = calculateChromosomeFilter(filterChromosomes, contigNames(context(bamFileIn)));
     const auto chromosomes = contigNames(context(bamFileIn));
- //   processBamFile(bamFileIn, chromosomeFilterSet, occurenceMap, stats);
+    processBamFile(bamFileIn, chromosomeFilterSet, occurenceMap, stats);
     auto t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
 
@@ -189,9 +189,9 @@ int main(int argc, char const * argv[])
         const std::string fileName = seqan::toCString(fileName_);
 
         std::ifstream infile(fileName);
-        std::string chromosome;
+        std::string chromosome, dummy;
         unsigned int start, end;
-        while (infile >> chromosome >> start >> end)
+        while (infile >> chromosome >> start >> end >> dummy)
         {
             int rID = -1;
             for (unsigned int i = 0;i < length(chromosomes);++i)
@@ -205,15 +205,35 @@ int main(int argc, char const * argv[])
                 std::cout << "invalid chromosome name: " << chromosome << " in file " << fileName << std::endl;
                 return -1;
             }
+            seqan::BamAlignmentRecord record;
+            record.beginPos = std::max<int>(start - radius, 0);
+            record.rID = rID;
+            record.flag = 0;
+            unsigned int index = 0;
+            if (start < radius)
+                index += radius - start;
+            while (record.beginPos <= start + radius)
+            {
+                BamRecordKey<NoBarcode> pos(record);
+                hits[index].first += occurenceMap[pos];
+                pos.init(pos.getRID(), pos.get5EndPosition(), true);
+                hits[index].second += occurenceMap[pos];
+                ++record.beginPos;
+                ++index;
+            }
         }
 
         std::fstream fs;
-        const std::string outFilename = getFilePath(fileName) + std::string("//centered_motif_positions.tab");
+        const std::string outFilename = getFilePath(fileName) + std::string("//5PrimeEnds.tab");
 #ifdef _MSC_VER
         fs.open(outFilename, std::fstream::out, _SH_DENYNO);
 #else
         fs.open(outFilename, std::fstream::out);
 #endif
+        int i = -radius;
+        for (const auto& hit : hits)
+            fs << i++ << "\t" << hit.first << "\t" << hit.second << std::endl;
+        fs.close();
     }
     t2 = std::chrono::steady_clock::now();
     std::cout << std::chrono::duration_cast<std::chrono::duration<float>>(t2 - t1).count() << "s" << std::endl;
