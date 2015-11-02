@@ -147,7 +147,7 @@ int main(int argc, char const * argv[])
         return 1;
     }
 
-    int radius = 1;
+    unsigned int radius = 1;
     getOptionValue(radius, parser, "r");
 
     seqan::CharString readsFileName;
@@ -182,7 +182,7 @@ int main(int argc, char const * argv[])
     t1 = std::chrono::steady_clock::now();
     std::cout << "calculating 5'-ends around peaks... ";
 
-    for (unsigned int fileIndex = 0;fileIndex < fileCount; ++fileIndex)
+    for (unsigned int fileIndex = 0;fileIndex < static_cast<unsigned int>(fileCount); ++fileIndex)
     {
         seqan::CharString fileName_;
         getArgumentValue(fileName_, parser, fileIndex, 0);
@@ -212,7 +212,7 @@ int main(int argc, char const * argv[])
             unsigned int index = 0;
             if (start < radius)
                 index += radius - start;
-            while (record.beginPos <= start + radius)
+            while (record.beginPos <= static_cast<__int32>(start + radius))
             {
                 BamRecordKey<NoBarcode> pos(record);
                 hits[index].first += occurenceMap[pos];
