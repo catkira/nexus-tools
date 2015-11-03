@@ -300,7 +300,7 @@ const auto calculateChromosomeFilter(const std::string& filterString, const TChr
 template <typename TEdgeDistribution, typename TCalcScore, typename TScoreDistribution>
 void calculateScoreDistribution2(const TEdgeDistribution& edgeDistribution, TCalcScore calcScore, const int maxDistance, TScoreDistribution& scoreDistribution)
 {
-    int distance = 0;
+    (void)maxDistance;    
     auto tempRange = Range<TEdgeDistribution>(edgeDistribution.begin(), edgeDistribution.end());
 
     for (unsigned int width = 0; width < 50; ++width)
