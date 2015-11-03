@@ -224,7 +224,7 @@ int main(int argc, char const * argv[])
         }
 
         std::fstream fs;
-        const std::string outFilename = getFilePath(fileName) + std::string("//5PrimeEnds.tab");
+        const std::string outFilename = getFilePrefix(fileName) + std::string("_5PrimeEnds.tab");
         std::cout << "writing " << outFilename << std::endl;
 #ifdef _MSC_VER
         fs.open(outFilename, std::fstream::out, _SH_DENYNO);
