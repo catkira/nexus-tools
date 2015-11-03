@@ -11,8 +11,6 @@ args = ("python", script_path + "/preprocess.py", "--adapters", "/../data/adapte
 args = args + tuple(sys.argv[1:])
 popen = subprocess.Popen(args)
 popen.wait()
-output = popen.stdout.read()
-print output
 if popen.returncode != 0:
 	print "error"
 	sys.exit()
