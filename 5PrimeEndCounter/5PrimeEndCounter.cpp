@@ -231,7 +231,7 @@ int main(int argc, char const * argv[])
 #else
         fs.open(outFilename, std::fstream::out);
 #endif
-        int i = -radius;
+        int i = - static_cast<int>(radius);
         for (const auto& hit : hits)
             fs << i++ << "\t" << hit.first << "\t" << hit.second << std::endl;
         fs.close();
