@@ -88,9 +88,13 @@ struct BamRecordKey<WithBarcode> : BamRecordKey<NoBarcode>
     BamRecordKey(TRecord&& record) : BamRecordKey<NoBarcode>(record)
     {
         const std::string idString = toCString(record.qName);
-        const auto posStart = idString.find("TL:") + 3;
+        auto posStart = idString.find("TL:");
         if (posStart == std::string::npos)
+        {
+            barcode.clear();
             return;
+        }
+        posStart += 3;
         auto posEnd = idString.find(':', posStart);
         if (posEnd == std::string::npos)
             posEnd = idString.length();
