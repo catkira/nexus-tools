@@ -868,7 +868,7 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
         statFile.open(std::string(seqan::toCString(outputStreams.getBaseFilename())) + "_flexcat_statistics.txt", std::fstream::out);
 #endif
         statFile << "command line: ";
-        for (unsigned int i = 0;i < argc;++i)
+        for (int i = 0;i < argc;++i)
             statFile << argv[i] << " ";
         statFile << std::endl;
         printStatistics(programParams, generalStats, demultiplexingParams, adapterTrimmingParams, !isSet(parser, "ni"), statFile);
