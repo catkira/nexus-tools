@@ -174,6 +174,9 @@ int main(int argc, char const * argv[])
         printShortHelp(parser);
         return 1;
     }
+    
+    seqan::CharString fileName1;
+    getArgumentValue(fileName1, parser, 0, 0);
 
     std::string outFilename;
     seqan::CharString output;
@@ -183,10 +186,7 @@ int main(int argc, char const * argv[])
         outFilename = seqan::toCString(output);
     }
     else
-        outFilename = getFilePrefix(argv[1]) + std::string("_candidateScores");
-
-    seqan::CharString fileName1;
-    getArgumentValue(fileName1, parser, 0, 0);
+        outFilename = getFilePrefix(seqan::toCString(fileName1)) + std::string("_candidateScores");
 
     seqan::CharString _filterChromosomes;
     seqan::getOptionValue(_filterChromosomes, parser, "fc");
