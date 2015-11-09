@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+# Author: Benjamin Menkuec
+# Copyright 2015 Benjamin Menkuec
+# License: LGPL
 
 import sys
 import os.path
@@ -7,9 +10,8 @@ import argparse
 import platform
 import multiprocessing
 
-#print 'Number of arguments:', len(sys.argv), 'arguments.'
-#print 'Argument List:', str(sys.argv)
-
+# this function calls a subroutine that will call samtools to 
+# sort the bam file and then build an index of it
 def indexBamFile(filename, script_path):
 	args = ("python", script_path + "/bam_indexer.py", filename)
 	print args
@@ -42,7 +44,8 @@ parser.add_argument('--clean', action='store_true')
 parser.add_argument('--overwrite', action='store_true')
 parser.add_argument('--verbose', action='store_true')
 parser.add_argument('--bowtie_location', nargs='?', default = "")
-parser.add_argument('--num_threads', nargs='?', default = str(multiprocessing.cpu_count()))
+parser.add_argument('--num_threads', nargs='?', default = 
+	str(multiprocessing.cpu_count()))
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
 parser.add_argument('--filter_chromosomes', type=str, default="")
@@ -51,12 +54,13 @@ parser.add_argument('genome', type=str)
 
 results, leftovers = parser.parse_known_args()
 
-flexcatAdapterFilename = os.path.dirname(os.path.realpath(__file__)) + results.adapters;
-flexcatBarcodeFilename = os.path.dirname(os.path.realpath(__file__)) + results.barcodes;
+flexcatAdapterFilename = (os.path.dirname(os.path.realpath(__file__)) + 
+	results.adapters)
+flexcatBarcodeFilename = (os.path.dirname(os.path.realpath(__file__)) + 
+	results.barcodes)
 
 print "Reads: " + results.input_file
 print "Genome: " + results.genome
-#print results.output
 
 genomeFilename = results.genome
 bowtieLocation = results.bowtie_location
@@ -70,11 +74,15 @@ if(platform.system() == "Windows" and results.bowtie_location == ""):
 inputFile = os.path.abspath(results.input_file)
 
 temp, inFileExtension = inputFile.split(os.extsep, 1)
-inFileExtension, temp = os.path.splitext(inFileExtension) # remove .gz if its a fastq.gz file
+# The output file of flexcat can not be a zipped fastq,
+# because bowtie can not handle it.
+# Therefore, remove .gz ending if its a fastq.gz file
+inFileExtension, temp = os.path.splitext(inFileExtension) 
 inFileExtension = "." + inFileExtension
 inFilenamePrefixWithoutPath = os.path.basename(inputFile)
 inFilenamePrefixWithoutPath, temp = inFilenamePrefixWithoutPath.split(os.extsep, 1)
 
+# set the output filename of flexcat
 if results.output_dir is not None:
     outputDir = os.path.abspath(results.output_dir) 
     head, tail = os.path.split(results.output_dir)
@@ -83,24 +91,36 @@ if results.output_dir is not None:
     outputDir = outputDir + "/"
 else:
     outputDir = inFilenamePrefixWithoutPath
-#output has to be fastq format, because bowtie does not support fastq.gz
-flexcatOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
+flexcatOutputFilename = (outputDir + "/" + inFilenamePrefixWithoutPath + 
+	inFileExtension)
 
+# if the exo option is set, there wont be any fixed barcode matching.
+# therefore the output file of flexcat does not have a postfix
 if results.exo:
- bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + inFileExtension
+ bowtieInputFilename = (outputDir + "/" + inFilenamePrefixWithoutPath + 
+	inFileExtension)
 else:
- bowtieInputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension
+ bowtieInputFilename = (outputDir + "/" + inFilenamePrefixWithoutPath + 
+	"_matched_barcode" + inFileExtension)
 bowtieOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + ".sam"
 
+# platform independant way of calling flexcat
 flexcat_path = script_path+"/../bin/flexcat"
 if(platform.system() == "Windows"):
 	flexcat_path += ".exe"
 	
 if results.exo:
- args = (flexcat_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", results.flexcat_times, "-er", results.flexcat_er, "-ol", results.flexcat_ol, "-oh", results.flexcat_oh, "-fm", results.flexcat_fm, "-ml", results.flexcat_ml, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
+ args = (flexcat_path, results.input_file, "-tt", "-t", "-ss", "-st", "-app", 
+	"-tnum", results.num_threads, "-times", results.flexcat_times, "-er", 
+	results.flexcat_er, "-ol", results.flexcat_ol, "-oh", results.flexcat_oh, 
+	"-fm", results.flexcat_fm, "-ml", results.flexcat_ml, "-a", 
+	flexcatAdapterFilename,"-o", flexcatOutputFilename)
 else:
- args = (flexcat_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", "-app", "-tnum", results.num_threads, "-times", results.flexcat_times, "-er", results.flexcat_er, "-ol", results.flexcat_ol, "-oh", results.flexcat_oh, "-fm", results.flexcat_fm, "-ml", results.flexcat_ml, "-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
- #args = ("flexcat", results.input_file, "-tl", "5","-b", flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
+ args = (flexcat_path, results.input_file, "-tl", "5", "-tt", "-t", "-ss", "-st", 
+	"-app", "-tnum", results.num_threads, "-times", results.flexcat_times, "-er", 
+	results.flexcat_er, "-ol", results.flexcat_ol, "-oh", results.flexcat_oh, 
+	"-fm", results.flexcat_fm, "-ml", results.flexcat_ml, "-b", 
+	flexcatBarcodeFilename, "-a", flexcatAdapterFilename,"-o", flexcatOutputFilename)
 if not os.path.exists(outputDir):
  os.makedirs(outputDir)
 if (os.path.isfile(bowtieInputFilename) == False or results.overwrite == True):
@@ -120,12 +140,15 @@ head, tail = os.path.split(genomeFilename)
 genomeIndex, file_extension = os.path.splitext(tail)
  
 # check if bowtie index already exists
+# if yes, skip building the index
 genomeIndexFile = os.path.dirname(genomeFilename) + "/" + genomeIndex;
 if (os.path.isfile(genomeIndexFile + ".1.ebwt") == False):
  if(platform.system() == "Linux" or platform.system() == "Linux2"):
-  args = (bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, genomeIndexFile)
+  args = (bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, 
+	genomeIndexFile)
  else:
-  args = ("python",  bowtieLocation + "bowtie-build", "-o", "1", genomeFilename, genomeIndexFile)
+  args = ("python",  bowtieLocation + "bowtie-build", "-o", "1", 
+	genomeFilename, genomeIndexFile)
  popen = subprocess.Popen(args, stdout=subprocess.PIPE)
  popen.wait()
  output = popen.stdout.read()
@@ -135,9 +158,11 @@ if (os.path.isfile(genomeIndexFile + ".1.ebwt") == False):
   print "error"
   sys.exit() 
 
-
+# call bowtie if mapped file does not exist or overwrite is true
 if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
-    args = (bowtieLocation + "bowtie", "-S", "-p", results.num_threads, "--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
+    args = (bowtieLocation + "bowtie", "-S", "-p", results.num_threads, 
+		"--chunkmbs", "512", "-k", "1", "-m", "1", "-v", "2", "--strata", "--best", 
+		genomeIndexFile, bowtieInputFilename, bowtieOutputFilename)
     if(platform.system() != "Linux" and platform.system() != "Linux2"):
      args = ("python",) + args
     print "Mapping reads..."
@@ -150,20 +175,26 @@ if (os.path.isfile(bowtieOutputFilename) == False or results.overwrite == True):
      print "error"
      sys.exit()
  
-#nexus-pre
-nexusOutputFilename = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered.bam"
+# nexus-pre
+nexusOutputFilename = (outputDir + "/" + inFilenamePrefixWithoutPath + 
+	"_filtered.bam")
 if results.random_split == True:
-	nexusOutputFilenameSplit1 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split1.bam"
-	nexusOutputFilenameSplit2 = outputDir + "/" + inFilenamePrefixWithoutPath + "_filtered_split2.bam"
+	nexusOutputFilenameSplit1 = (outputDir + "/" + inFilenamePrefixWithoutPath + 
+	"_filtered_split1.bam")
+	nexusOutputFilenameSplit2 = (outputDir + "/" + inFilenamePrefixWithoutPath + 
+	"_filtered_split2.bam")
 
+# platform independant way of calling nexus-pre
 nexus_pre_path = script_path+"/../bin/nexus-pre"
 if(platform.system() == "Windows"):
 	nexus_pre_path += ".exe"
 	
-	
+# call nexus-pre if overwrite is true or output files dont exist	
 if (os.path.isfile(nexusOutputFilename) == False or 
-(results.random_split == True and (os.path.isfile(nexusOutputFilenameSplit1) == False or os.path.isfile(nexusOutputFilenameSplit2) == False)) or
-results.overwrite == True):
+	(results.random_split == True and 
+		(os.path.isfile(nexusOutputFilenameSplit1) == False or 
+			os.path.isfile(nexusOutputFilenameSplit2) == False)) or
+		results.overwrite == True):
     args = (nexus_pre_path, bowtieOutputFilename,  "-fc", results.filter_chromosomes)
     if results.random_split == True:
 		args += ("-rs",)
@@ -177,12 +208,13 @@ results.overwrite == True):
         print "error"
         sys.exit()
 
+# special option for binding characteristic analysis
 indexBamFile(nexusOutputFilename, script_path)			
 if results.random_split == True:
 	indexBamFile(nexusOutputFilenameSplit2, script_path)		
 	indexBamFile(nexusOutputFilenameSplit1, script_path)		
 	
-#cleanup
+# cleanup
 if results.clean:
     print "deleting intermediate files..."
     os.remove(bowtieOutputFilename)
@@ -190,5 +222,7 @@ if results.clean:
     if results.exo:
         os.remove(flexcatOutputFilename)
     else:
-        os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_matched_barcode" + inFileExtension)
-        os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + "_unidentified" + inFileExtension)
+        os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + 
+			"_matched_barcode" + inFileExtension)
+        os.remove(outputDir + "/" + inFilenamePrefixWithoutPath + 
+			"_unidentified" + inFileExtension)
