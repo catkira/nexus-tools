@@ -1,6 +1,6 @@
 cmake_minimum_required (VERSION 2.8.2)
-project(nexus-pre)
-message (STATUS "Configuring nexus-pre")
+project(nexcat)
+message (STATUS "Configuring nexcat")
 
 add_definitions (-DSEQAN_APP_VERSION="1.0.0")
 
@@ -14,7 +14,7 @@ set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS} $
 
 # Warn if Zlib was not found.
 if (NOT ${SEQAN_HAS_ZLIB})
-  message (WARNING "WARNING: Zlib not found. Building nexus-pre without gzipped input and output.")
+  message (WARNING "WARNING: Zlib not found. Building nexcat without gzipped input and output.")
 endif (NOT ${SEQAN_HAS_ZLIB})
 
 # Add definitions set by find_package (SeqAn).
@@ -40,7 +40,7 @@ INCLUDE_DIRECTORIES(${SEQAN_INCLUDE_DIRS} ${Boost_INCLUDE_DIR} ${CMAKE_CURRENT_S
 		
 # Output
     SET(ALLSRC ${Sources} ${Headers})
-    ADD_EXECUTABLE(nexus-pre ${ALLSRC})
+    ADD_EXECUTABLE(nexcat ${ALLSRC})
 	
-    target_link_libraries (nexus-pre ${SEQAN_LIBRARIES} ${Boost_LIBRARIES} )
+    target_link_libraries (nexcat ${SEQAN_LIBRARIES} ${Boost_LIBRARIES} )
 				  
