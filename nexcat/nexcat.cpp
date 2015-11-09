@@ -1,3 +1,9 @@
+/*
+Author: Benjamin Menkuec
+Copyright 2015 Benjamin Menkuec
+License: LGPL
+*/
+
 #include <seqan/bam_io.h>
 #include <seqan/bed_io.h>
 #include <seqan/seq_io.h>

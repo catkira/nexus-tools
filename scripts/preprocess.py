@@ -185,17 +185,17 @@ if results.random_split == True:
 	"_filtered_split2.bam")
 
 # platform independant way of calling nexus-pre
-nexus_pre_path = script_path+"/../bin/nexus-pre"
+nexcat_path = script_path+"/../bin/nexcat"
 if(platform.system() == "Windows"):
-	nexus_pre_path += ".exe"
+	nexcat_path += ".exe"
 	
-# call nexus-pre if overwrite is true or output files dont exist	
+# call nexcat if overwrite is true or output files dont exist	
 if (os.path.isfile(nexusOutputFilename) == False or 
 	(results.random_split == True and 
 		(os.path.isfile(nexusOutputFilenameSplit1) == False or 
 			os.path.isfile(nexusOutputFilenameSplit2) == False)) or
 		results.overwrite == True):
-    args = (nexus_pre_path, bowtieOutputFilename,  "-fc", results.filter_chromosomes)
+    args = (nexcat_path, bowtieOutputFilename,  "-fc", results.filter_chromosomes)
     if results.random_split == True:
 		args += ("-rs",)
     print "Filtering post-mapping barcodes..."

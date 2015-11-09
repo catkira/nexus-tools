@@ -37,6 +37,7 @@
 #undef SEQAN_ENABLE_TESTING
 #define SEQAN_ENABLE_TESTING 1
 
+#include <limits>
 #include <seqan/basic.h>
 #include <seqan/sequence.h>
 #include <seqan/seq_io.h>
