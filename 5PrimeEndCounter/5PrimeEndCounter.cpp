@@ -49,6 +49,12 @@ seqan::ArgumentParser buildParser(void)
     setValidValues(readsOpt, seqan::BamFileIn::getFileExtensions());
     addOption(parser, readsOpt);
 
+    seqan::ArgParseOption outputOpt = seqan::ArgParseOption(
+        "o", "output", "Name of output file.",
+        seqan::ArgParseOption::INPUT_FILE, "INPUT");
+    setValidValues(outputOpt, ".bed");
+    addOption(parser, outputOpt);
+
     seqan::ArgParseOption radiusOpt = seqan::ArgParseOption(
         "r", "radius", "radius around peaks to scan ",
         seqan::ArgParseOption::INTEGER, "VALUE");
@@ -156,9 +162,6 @@ int main(int argc, char const * argv[])
     // Open input file, BamFileIn can read SAM and BAM files.
     seqan::BamFileIn bamFileIn(seqan::toCString(readsFileName));
     
-    std::string outFilename;
-    outFilename = getFilePrefix(argv[1]) + std::string("_filtered");
-
     seqan::CharString _filterChromosomes;
     seqan::getOptionValue(_filterChromosomes, parser, "fc");
     std::string filterChromosomes = seqan::toCString(_filterChromosomes);
@@ -227,8 +230,16 @@ int main(int argc, char const * argv[])
             }
         }
 
+        std::string outFilename = getFilePrefix(fileName) + std::string("_5PrimeEnds.tab");
+        if (seqan::isSet(parser, "o"))
+        {
+            seqan::CharString outFileName_;
+            getOptionValue(outFileName_, parser, "o");
+            outFilename = seqan::toCString(outFileName_);
+        }
+
+
         std::fstream fs;
-        const std::string outFilename = getFilePrefix(fileName) + std::string("_5PrimeEnds.tab");
         std::cout << "writing " << outFilename << std::endl;
 #ifdef _MSC_VER
         fs.open(outFilename, std::fstream::out, _SH_DENYNO);
