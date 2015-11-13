@@ -249,6 +249,20 @@ void ArgumentParserBuilder::addGeneralOptions(seqan::ArgumentParser & parser, co
     seqan::ArgParseOption adInfoOpt = seqan::ArgParseOption(
         "ni", "noInfo", "Don't print paramter overview to console.");
     addOption(parser, adInfoOpt);
+
+    seqan::ArgParseOption finMinLenOpt = seqan::ArgParseOption(
+        "fm", "finalMinLength", "Deletes read (and mate)"
+        " if on of them is shorter than the given value after the complete worflow.",
+        seqan::ArgParseArgument::INTEGER, "LENGTH");
+    setMinValue(finMinLenOpt, "1");
+    addOption(parser, finMinLenOpt);
+
+    seqan::ArgParseOption finLenOpt = seqan::ArgParseOption(
+        "fl", "finalLength", "Trims reads to desired length after the complete workflow.",
+        seqan::ArgParseArgument::INTEGER, "LENGTH");
+    setDefaultValue(finLenOpt, 0);
+    setMinValue(finLenOpt, "1");
+    addOption(parser, finLenOpt);
 }
 
 void ArgumentParserBuilder::addFilteringOptions(seqan::ArgumentParser & parser)
@@ -275,7 +289,7 @@ void ArgumentParserBuilder::addFilteringOptions(seqan::ArgumentParser & parser)
     addOption(parser, rigthTrimOpt);
 
     seqan::ArgParseOption minLenOpt = seqan::ArgParseOption(
-        "ml", "minLength", "Required minimal length of reads after all PREprocessing steps.",
+        "ml", "minLength", "Required minimal length of reads after trimming.",
         seqan::ArgParseArgument::INTEGER, "LENGTH");
     setDefaultValue(minLenOpt, 0);
     setMinValue(minLenOpt, "0");
@@ -294,20 +308,6 @@ void ArgumentParserBuilder::addFilteringOptions(seqan::ArgumentParser & parser)
     setDefaultValue(substituteOption, "A");
     setValidValues(substituteOption, "A C G T");
     addOption(parser, substituteOption);
-
-    seqan::ArgParseOption finMinLenOpt = seqan::ArgParseOption(
-        "fm", "finalMinLength", "Deletes read (and mate)"
-        " if on of them is shorter than the given value after the complete worflow.",
-        seqan::ArgParseArgument::INTEGER, "LENGTH");
-    setMinValue(finMinLenOpt, "1");
-    addOption(parser, finMinLenOpt);
-
-    seqan::ArgParseOption finLenOpt = seqan::ArgParseOption(
-        "fl", "finalLength", "Trims reads to desired length after the complete workflow.",
-        seqan::ArgParseArgument::INTEGER, "LENGTH");
-    setDefaultValue(finLenOpt, 0);
-    setMinValue(finLenOpt, "1");
-    addOption(parser, finLenOpt);
 
     addTextSection(parser, "EXAMPLE");
     std::string appName;

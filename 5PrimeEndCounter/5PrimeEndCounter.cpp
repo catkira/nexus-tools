@@ -215,9 +215,13 @@ int main(int argc, char const * argv[])
             while (record.beginPos <= static_cast<__int32>(start + radius))
             {
                 BamRecordKey<NoBarcode> pos(record);
-                hits[index].first += occurenceMap[pos];
+                auto el = occurenceMap.find(pos);
+                if(el != occurenceMap.end())
+                    hits[index].first += el->second;
                 pos.init(pos.getRID(), pos.get5EndPosition(), true);
-                hits[index].second += occurenceMap[pos];
+                el = occurenceMap.find(pos);
+                if (el != occurenceMap.end())
+                    hits[index].second += el->second;
                 ++record.beginPos;
                 ++index;
             }
