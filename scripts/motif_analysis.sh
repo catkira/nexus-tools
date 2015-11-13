@@ -7,10 +7,15 @@ reffile=$2
 peakfile=$3
 selected_motif=$4
 motif_file=$5
+motif_threshold=$6
 
 #extend width of peaks
 less $peakfile | awk -v width=$width 'BEGIN {OFS="\t"} $1!="track" \
-	{print $1,$2-width,$3+width,$4}' > temp.bed
+	{\
+    start = $2-width;\
+    if (start < 0) \
+        start = 0; \    
+    print $1,start,$3+width,$4}' > temp.bed
 
 #get sequence for peaks
 bedtools getfasta -fi $reffile -bed temp.bed -fo temp.fa
@@ -41,16 +46,19 @@ fi
 
 echo $motif > current_motif.txt
 echo -------------------------------------------------
-echo using motif file $motif_file with motif $motif
+echo using motif file $motif_file with motif $motif for $peakfile
 echo -------------------------------------------------
 
 #find top motif in peak sequences
-fimo --motif $motif $motif_file temp_no_repeats.fa
+#set threshold so that only exact matches will be reported
+fimo --qv-thresh --thresh $motif_threshold --max-stored-scores 20000000 --motif $motif $motif_file temp_no_repeats.fa
 
 #generate centered motif locations
+#	offset = int(($4+$5)/2); \
 less ./fimo_out/fimo.gff | grep "^chr"| awk 'BEGIN{OFS="\t"} \
 	{split($1,chr,":"); split(chr[2],loc,"-"); \
-	offset = int(($4+$5)/2); \
+    offset = int(($4+$5)/2); \
+    if ($7=="+") \
 	print chr[1],loc[1]+offset,loc[1]+offset+1,$9}' \
 	> centered_motif_locations.bed
 
