@@ -26,23 +26,12 @@ less temp.fa | awk 'BEGIN {OFS="\t"} \
 	else{gsub(/[a-z]/,"N",$0);print $0}}'\
 	> temp_no_repeats.fa
 
-re='^[0-9]+$'
-if [[ $selected_motif =~ $re ]] ; then
-    #find top N motifs until the selected one, maximum motif size = 10
-    if [ "$motif_file" == "" ] ; then
-        dreme -m $selected_motif -maxk 10 -p temp_no_repeats.fa
-        motif_file=./dreme_out/dreme.xml
-    fi
-
-    #select m01 for first motif, m02 for second ....
-    motif_idline=$(grep "m0$selected_motif" $motif_file)
-    motif=$(awk 'BEGIN{FS="\""}{print $4}' <<< $motif_idline)
-else
-    motif=$selected_motif
-    if [ "$motif_file" == "" ] ; then
-        motif_file=./dreme_out/dreme.xml
-    fi
+#find top N motifs until the selected one, maximum motif size = 10
+if [ "$motif_file" == "" ] ; then
+    dreme -m $selected_motif -maxk 10 -p temp_no_repeats.fa
+    motif_file=./dreme_out/dreme.xml
 fi
+motif=$selected_motif
 
 echo $motif > current_motif.txt
 echo -------------------------------------------------
