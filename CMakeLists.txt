@@ -17,7 +17,7 @@ if(LINUX_STATIC)
     set(Boost_USE_STATIC_LIBS ON)
     set(SEQAN_LIBRARIES ${SEQAN_LIBRARIES} "-Wl,--whole-archive -lpthread -Wl,--no-whole-archive")
 else()
-    cmake_minimum_required (VERSION 2.8.12)
+    cmake_minimum_required (VERSION 2.8.7)
 endif(LINUX_STATIC)
 
 set (CMAKE_INCLUDE_PATH
