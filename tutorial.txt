@@ -24,7 +24,10 @@ sudo apt-get install cmake
 sudo apt-get install libboost-all-dev
 
 cd ~
-git clone -b develop https://github.com/catkira/seqan
+git clone https://github.com/seqan/seqan.git seqan2
+cd seqan2
+git checkout seqan-v2.0.1
+cd ..
 git clone https://github.com/catkira/nexus-tools
 cd nexus-tools
 ./build_linux_release.sh (or ./build_linux_static_release.sh, needs Cmake-version >= 3.1)

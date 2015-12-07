@@ -288,11 +288,12 @@ const auto calculateChromosomeFilter(const std::string& filterString, const TChr
     const auto numChromosomes = length(chromosomeNames);
     std::set<unsigned int> chromosomeFilter;
     std::regex re(filterString);
+    std::cout << std::endl;
     for (unsigned int i = 0;i < numChromosomes; ++i)
         if (std::regex_match(seqan::toCString(chromosomeNames[i]), re))
         {
             chromosomeFilter.insert(i);
-            //std::cout << "Filtering chromosome " << chromosomeNames[i] << std::endl;
+            std::cout << "Filtering chromosome " << chromosomeNames[i] << std::endl;
         }
     return chromosomeFilter;
 }

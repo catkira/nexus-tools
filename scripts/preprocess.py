@@ -48,7 +48,7 @@ parser.add_argument('--num_threads', nargs='?', default =
 	str(multiprocessing.cpu_count()))
 parser.add_argument('input_file')
 parser.add_argument('--output_dir', type=str)
-parser.add_argument('--filter_chromosomes', type=str, default="")
+parser.add_argument('--filter_chromosomes', type=str, default="(.*)[H|U|M|_]+(.*)")
 parser.add_argument('--random_split', action='store_true')
 parser.add_argument('genome', type=str)
 
