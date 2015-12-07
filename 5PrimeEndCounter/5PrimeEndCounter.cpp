@@ -52,7 +52,6 @@ seqan::ArgumentParser buildParser(void)
     seqan::ArgParseOption outputOpt = seqan::ArgParseOption(
         "o", "output", "Name of output file.",
         seqan::ArgParseOption::INPUT_FILE, "INPUT");
-    setValidValues(outputOpt, ".bed");
     addOption(parser, outputOpt);
 
     seqan::ArgParseOption radiusOpt = seqan::ArgParseOption(
