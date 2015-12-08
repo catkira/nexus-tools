@@ -12,8 +12,8 @@ printFile <- function(filename, output_filename)
   # just use range again)
   
   # Define colors to be used for cars, trucks, suvs
-  plot_colors = c("black","black","darkgray")
-  line_types = c("dotted","solid","solid");
+  plot_colors = c("black","green","red")
+  line_types = c("solid","solid","solid");
   
   # Start PNG device driver to save output to figure.png
   cairo_pdf(output_filename,width=9,height=7.5)
@@ -69,8 +69,10 @@ printFile <- function(filename, output_filename)
 
   print(usr)
   
-  text((usr[1]+usr[2])/1.6,usr[4]*0.99, paste("unique reads: ",as.character(sum(duplication_rate$unique)),"\n",
-                     "nonunique reads: ",as.character(sum(duplication_rate$non_unique))), adj=c(1,1))
+  text((usr[1]+usr[2])/1.6,usr[4]*0.99, paste("mapped reads: ",as.character(sum(duplication_rate$unique)+sum(duplication_rate$non_unique)),"\n",
+                     "unique reads: ",as.character(sum(duplication_rate$unique)),"\n",
+                     "non-unique reads: ",as.character(sum(duplication_rate$non_unique)),"\n",
+                     "PCR artifacts rate: ",as.character(signif(sum(duplication_rate$non_unique)/(sum(duplication_rate$non_unique)+sum(duplication_rate$unique))),3)), adj=c(1,1))
   
   legend("topright", c("total duplicates","unique duplicates", "PCR artifacts rate"), cex=0.8, col=plot_colors, lty=line_types)
   dev.off()
