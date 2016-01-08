@@ -437,9 +437,9 @@ int main(int argc, char const * argv[])
 
     printStatistics(std::cout, stats, seqan::isSet(parser, "f"));
 #ifdef _MSV_VER
-    fs3.open(getFilePrefix(seqan::toCString(fileName1)) + "_statistics.txt", std::fstream::out, _SH_DENYNO);
+    fs3.open(getFilePrefix(seqan::toCString(fileName1)) + "_nexcat_statistics.txt", std::fstream::out, _SH_DENYNO);
 #else
-    fs3.open(getFilePrefix(seqan::toCString(fileName1)) + "_statistics.txt", std::fstream::out);
+    fs3.open(getFilePrefix(seqan::toCString(fileName1)) + "_nexcat_statistics.txt", std::fstream::out);
 #endif
     printStatistics(fs3, stats, seqan::isSet(parser, "f"), true);
     fs3 << "Command line\t";
