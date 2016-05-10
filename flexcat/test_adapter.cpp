@@ -275,43 +275,43 @@ SEQAN_DEFINE_TEST(align_adapter_test)
 
 	TSeq seq = TSeq("AAAAAAAAAATTTTT");
 	TAda ada = TAda("TTTTTTTTTTT");
-	std::pair<int, seqan::Align<TSeq> > pair;
-    alignPair(pair, seq, ada, AlignAlgorithm::NeedlemanWunsch());
-	SEQAN_ASSERT_EQ(pair.first, 5);
+    AlignResult result;
+    alignPair(result, seq, ada, AlignAlgorithm::NeedlemanWunsch());
+	SEQAN_ASSERT_EQ(result.score, 5);
 
 	seq = TSeq("AAAAAAAAAATATATTA");
 	//                    |||||		   
 	ada = TAda(       "GGTTATATATTT"); // front and back gaps are allowed
-    alignPair(pair, seq, ada, AlignAlgorithm::NeedlemanWunsch());
-	SEQAN_ASSERT_EQ(pair.first, 2);
+    alignPair(result, seq, ada, AlignAlgorithm::NeedlemanWunsch());
+	SEQAN_ASSERT_EQ(result.score, 2);
 
 	seq = TSeq("AAAAAAAAAATATATTA");
 	//                || |||||||		   
 	ada = TAda(     "GAATATATATTT"); // front and back gaps are allowed
-    alignPair(pair, seq, ada, AlignAlgorithm::NeedlemanWunsch());
-	SEQAN_ASSERT_EQ(pair.first, 6);
+    alignPair(result, seq, ada, AlignAlgorithm::NeedlemanWunsch());
+	SEQAN_ASSERT_EQ(result.score, 6);
 
     unsigned int rightOverhang = 4;
     unsigned int leftOverhang = 4;
     seq = TSeq("CATCATAAAAAATATATTA");
     //          ||||||		   
     ada = TAda("CATCAT"); 
-    alignPair(pair, seq, ada, leftOverhang, rightOverhang, AlignAlgorithm::NeedlemanWunsch());
-    SEQAN_ASSERT_EQ(pair.first, 6);
+    alignPair(result, seq, ada, leftOverhang, rightOverhang, AlignAlgorithm::NeedlemanWunsch());
+    SEQAN_ASSERT_EQ(result.score, 6);
 
     // just enough overlap
     seq = TSeq(    "CATCATAAAAAATATATTA");
     //              ||||		   
     ada = TAda("GGGGCATC"); 
-    alignPair(pair, seq, ada, leftOverhang, rightOverhang, AlignAlgorithm::NeedlemanWunsch());
-    SEQAN_ASSERT_EQ(pair.first, 4);
+    alignPair(result, seq, ada, leftOverhang, rightOverhang, AlignAlgorithm::NeedlemanWunsch());
+    SEQAN_ASSERT_EQ(result.score, 4);
 
     // not enough overlap, should report score 0
     seq = TSeq(     "CATCATAAAAAATATATTA");
     //               |||		   
     ada = TAda("GGGGGCAT");
-    alignPair(pair, seq, ada, leftOverhang, rightOverhang, AlignAlgorithm::NeedlemanWunsch());
-    SEQAN_ASSERT_EQ(pair.first, 0);
+    alignPair(result, seq, ada, leftOverhang, rightOverhang, AlignAlgorithm::NeedlemanWunsch());
+    SEQAN_ASSERT_EQ(result.score, 0);
 }
 
 SEQAN_DEFINE_TEST(strip_pair_test)
