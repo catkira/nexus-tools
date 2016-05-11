@@ -390,7 +390,6 @@ template <typename TSeq, typename TAdapters, typename TStripAdapterDirection>
 unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& adapters, AdapterMatchSettings const& spec,
     const TStripAdapterDirection&)
 {
-    using TAlign = seqan::Align<TSeq>;
     AlignAlgorithm::Menkuec alignAlgorithm;
 
     unsigned removed{ 0 };
