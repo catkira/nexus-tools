@@ -547,8 +547,8 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
         std::get<0>(bestMatch).score = noMatch;
         for (auto const& adapterItem : adapters)
         {
-            if (static_cast<unsigned>(length(adapterItem.seq)) < spec.min_length)
-                continue;
+            //if (static_cast<unsigned>(length(adapterItem.seq)) < spec.min_length)
+              //  continue;
             if ((TStripAdapterDirection::value == adapterDirection::reverse && adapterItem.reverse == false) ||
                 (TStripAdapterDirection::value == adapterDirection::forward && adapterItem.reverse == true))
                 continue;
@@ -561,11 +561,8 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
             else
                 alignPair(alignResult, seqan::Dna5String(seq), adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (alignResult.score < 0)
-                continue;
-
             if (isMatch(alignResult.overlap, alignResult.overlap - alignResult.matches - alignResult.ambiguous, spec) 
-                    && std::get<0>(bestMatch).score < alignResult.score)
+                    && std::get<0>(bestMatch).errorRate > alignResult.errorRate)
                 bestMatch = std::make_tuple(alignResult, adapterItem);
         }
         if (std::get<0>(bestMatch).score == noMatch)
@@ -610,8 +607,7 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
         stats.minOverlap = std::min(stats.minOverlap, std::get<0>(bestMatch).overlap);
         // dont try more adapter trimming if the read is too short already
         if (static_cast<unsigned>(length(seq)) < spec.min_length)
-            return removed;
-            
+            return removed;     
     }
     return removed;
 }
