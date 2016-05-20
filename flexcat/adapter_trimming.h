@@ -181,6 +181,7 @@ struct AlignResult
     AlignResult() : score(std::numeric_limits<int>::min()), matches(0), ambiguous(0), overlap(0), errorRate(1), shiftPos(0) {};
     int score;
     unsigned int matches;
+    unsigned int mismatches;
     unsigned int ambiguous;
     unsigned int overlap;
     float errorRate;
@@ -244,6 +245,7 @@ void alignPair(AlignResult &res, const TSeq& seq1, const TAdapter& seq2,
 }
 
 const __m128i ONE_128 = _mm_set1_epi8(1);
+const __m128i ONE_8 = _mm_set1_epi64x(1);
 const __m128i ZERO_128 = _mm_set1_epi8(0);
 const __m128i N_128 = _mm_set1_epi8(0x04);
 
@@ -279,8 +281,8 @@ struct compareAdapter
         const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
 
         // SSE2 code
-        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
-        matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_8));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_8));
         
         // SSE4.2 code 
         //ambiguous += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(NMask, ONE_128), 0));
@@ -443,10 +445,14 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
             bestRes.ambiguous = ambiguous;
             bestRes.errorRate = errorRate;
             bestRes.shiftPos = shiftPos;
-            bestRes.score = 2*matches - overlap + ambiguous;
             bestRes.overlap = overlap;
         }
         ++shiftPos;
+    }
+    if (bestRes.matches != 0)
+    {
+        bestRes.mismatches = bestRes.overlap - bestRes.matches - bestRes.ambiguous;
+        bestRes.score = 2 * bestRes.matches - bestRes.overlap + bestRes.ambiguous;
     }
     ret = bestRes;
 }
@@ -545,11 +551,12 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
 
     unsigned removed{ 0 };
     AlignResult alignResult;
-    std::tuple<AlignResult, AdapterItem> bestMatch;
     const int noMatch = std::numeric_limits<int>::min();
+    unsigned removedOld = 0;
+
     for (unsigned int n = 0;n < spec.times; ++n)
     {
-        std::get<0>(bestMatch).score = noMatch;
+        alignResult.score = noMatch;
         for (auto const& adapterItem : adapters)
         {
             //if (static_cast<unsigned>(length(adapterItem.seq)) < spec.min_length)
@@ -559,57 +566,58 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
                 continue;
 
             const auto& adapterSequence = adapterItem.seq;
-            const unsigned int oppositeEndOverhang = adapterItem.anchored == true ? length(adapterSequence) - length(seq) : adapterItem.overhang;
-            const unsigned int sameEndOverhang = adapterItem.anchored == true ? 0 : length(adapterItem.seq) - spec.min_length;
+            const auto lenAdapter = length(adapterSequence);
+            const auto lenSeq = length(seq);
+
+            const unsigned int oppositeEndOverhang = adapterItem.anchored == true ? lenAdapter - lenSeq : adapterItem.overhang;
+            const unsigned int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - spec.min_length;
             if (adapterItem.adapterEnd == AdapterItem::end3)
                 alignPair(alignResult, seqan::Dna5String(seq), adapterSequence, oppositeEndOverhang, sameEndOverhang, alignAlgorithm);
             else
                 alignPair(alignResult, seqan::Dna5String(seq), adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.overlap - alignResult.matches - alignResult.ambiguous, spec) 
-                    && std::get<0>(bestMatch).errorRate > alignResult.errorRate)
-                bestMatch = std::make_tuple(alignResult, adapterItem);
+            if (isMatch(alignResult.overlap, alignResult.mismatches, spec))
+            {
+                unsigned eraseStart = 0;
+                unsigned eraseEnd = 0;
+                if (adapterItem.adapterEnd == AdapterItem::end3)
+                {
+                    eraseStart = alignResult.shiftPos;
+                    eraseEnd = lenSeq;
+                }
+                else
+                {
+                    eraseStart = 0;
+                    eraseEnd = std::min<unsigned>(lenSeq, alignResult.shiftPos + lenAdapter);
+                }
+
+                seqan::erase(seq, eraseStart, eraseEnd);
+                removed += eraseEnd - eraseStart;
+
+                // update statistics        
+                const auto statisticLen = eraseEnd - eraseStart;
+                if (stats.removedLength.size() < statisticLen)
+                    stats.removedLength.resize(statisticLen);
+                if (stats.removedLength[statisticLen - 1].size() < alignResult.mismatches + 1)
+                    stats.removedLength[statisticLen - 1].resize(alignResult.mismatches + 1);
+                ++stats.removedLength[statisticLen - 1][alignResult.mismatches];
+
+                if (stats.numRemoved.size() < adapterItem.id + 1)
+                {
+                    std::cout << "error: numRemoved too small!" << std::endl;
+                    throw(std::runtime_error("error: numRemoved too small!"));
+                }
+                ++stats.numRemoved[adapterItem.id];
+
+                stats.overlapSum += alignResult.overlap;
+                stats.maxOverlap = std::max(stats.maxOverlap, alignResult.overlap);
+                stats.minOverlap = std::min(stats.minOverlap, alignResult.overlap);
+            }
         }
-        if (std::get<0>(bestMatch).score == noMatch)
+        if (removed == removedOld)
             return removed;
+        removedOld = removed;
 
-        // erase best matching adapter from sequence
-        const AdapterItem& adapterItem = std::get<1>(bestMatch);
-        const auto mismatches = std::get<0>(bestMatch).overlap - std::get<0>(bestMatch).matches - std::get<0>(bestMatch).ambiguous;
-        unsigned eraseStart = 0;
-        unsigned eraseEnd = 0;
-        if (adapterItem.adapterEnd == AdapterItem::end3)
-        {
-            eraseStart = std::get<0>(bestMatch).shiftPos;
-            eraseEnd = length(seq);
-        }
-        else
-        {
-            eraseStart = 0;
-            eraseEnd = std::min<unsigned>(length(seq), std::get<0>(bestMatch).shiftPos + length(adapterItem.seq));
-        }
-
-        seqan::erase(seq, eraseStart, eraseEnd);
-        removed += eraseEnd - eraseStart;
-
-        // update statistics        
-        const auto statisticLen = eraseEnd - eraseStart;
-        if (stats.removedLength.size() < statisticLen)
-            stats.removedLength.resize(statisticLen);
-        if (stats.removedLength[statisticLen - 1].size() < mismatches + 1)
-            stats.removedLength[statisticLen - 1].resize(mismatches + 1);
-        ++stats.removedLength[statisticLen - 1][mismatches];
-
-        if (stats.numRemoved.size() < adapterItem.id + 1)
-        {
-            std::cout << "error: numRemoved too small!" << std::endl;
-            throw(std::runtime_error("error: numRemoved too small!"));
-        }
-        ++stats.numRemoved[adapterItem.id];
-
-        stats.overlapSum += std::get<0>(bestMatch).overlap;
-        stats.maxOverlap = std::max(stats.maxOverlap, std::get<0>(bestMatch).overlap);
-        stats.minOverlap = std::min(stats.minOverlap, std::get<0>(bestMatch).overlap);
         // dont try more adapter trimming if the read is too short already
         if (static_cast<unsigned>(length(seq)) < spec.min_length)
             return removed;     
