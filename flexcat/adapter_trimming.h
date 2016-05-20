@@ -39,6 +39,7 @@
 #include "helper_functions.h"
 #include "general_stats.h"
 #include <xmmintrin.h>
+#include <nmmintrin.h>
 
 // ============================================================================
 // Metafunctions
@@ -242,6 +243,10 @@ void alignPair(AlignResult &res, const TSeq& seq1, const TAdapter& seq2,
     res.errorRate = static_cast<float>(res.overlap - res.matches) / static_cast<float>(res.overlap);
 }
 
+const __m128i ONE_128 = _mm_set1_epi8(1);
+const __m128i ZERO_128 = _mm_set1_epi8(0);
+const __m128i N_128 = _mm_set1_epi8(0x04);
+
 template <unsigned int N>
 struct compareAdapter
 {
@@ -251,8 +256,24 @@ struct compareAdapter
     template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
     inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
     {
-        matches += (adapterIterator->value == readIterator->value);
-        ambiguous += (readIterator->value == NBase || adapterIterator->value == NBase);
+        //bool isN = (readIterator->value == NBase || adapterIterator->value == NBase);
+        //matches += ((adapterIterator->value == readIterator->value) && !isN);
+        //ambiguous += isN;
+
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(readIterator));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(adapterIterator));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        // SSE2 code
+        //ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
+        //matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
+        
+        // SSE4.2 code 
+        ambiguous += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(NMask, ONE_128), 0));
+        matches += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(matchesMask, ONE_128), 0));
+
         ++adapterIterator;
         ++readIterator;
         compareAdapter<N-1>::apply(readIterator, adapterIterator, matches, ambiguous);
@@ -271,12 +292,6 @@ struct compareAdapter<0>
         (void)ambiguous;
     }
 };
-
-const __m128i ONE_128 = _mm_set1_epi8(1);
-const __m128i ZERO_128 = _mm_set1_epi8(0);
-const __m128i N_128 = _mm_set1_epi8(0x04);
-
-//TODO: use SSE4 popcnt
 
 inline size_t popcnt64(__m128i value) noexcept
 {
@@ -302,13 +317,14 @@ struct compareAdapter<8>
         const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
         const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
 
-        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
-        matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
+        //ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
+        //matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
+        ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
         readIterator += 8;
         adapterIterator += 8;
     }
 };
-
 
 template <>
 struct compareAdapter<16>
@@ -348,6 +364,10 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
     AlignResult bestRes;
     //const auto NBase = ((seqan::Dna5)'N').value;
     //const unsigned char NBase = 0; // use this as long as seqan does not support constexpr initialization
+    const seqan::Iterator<const TSeq>::Type readBeginIterator = seqan::begin(read);
+    const seqan::Iterator<const TAdapter>::Type adapterBeginIterator = seqan::begin(adapter);
+    seqan::Iterator<const TSeq>::Type readIterator = readBeginIterator;
+    seqan::Iterator<const TAdapter>::Type adapterIterator = adapterBeginIterator;
     while (shiftPos <= shiftEndPos)
     {
         const unsigned int overlapNegativeShift = std::min(shiftPos + lenAdapter, lenRead);
@@ -357,18 +377,11 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
         unsigned int matches = 0;
         unsigned int ambiguous = 0;
         unsigned int remaining = overlap;
-        seqan::Iterator<const TSeq>::Type readIterator = seqan::begin(read) + overlapStart;
-        seqan::Iterator<const TAdapter>::Type adapterIterator = seqan::begin(adapter) + std::min(0, shiftPos)*(-1);
+        readIterator = readBeginIterator + overlapStart;
+        adapterIterator = adapterBeginIterator + std::min(0, shiftPos)*(-1);
 
         while (remaining >= 16)
         {
-            //for (unsigned char c = 0; c < 16; ++c)
-            //{
-            //    matches += adapterIterator->value == readIterator->value;
-            //    ambiguous += readIterator->value == NBase;
-            //    ++adapterIterator;
-            //    ++readIterator;
-            //}
             compareAdapter<16>::apply(readIterator, adapterIterator, matches, ambiguous);
             remaining -= 16;
         }
@@ -423,14 +436,6 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
             compareAdapter<15>::apply(readIterator, adapterIterator, matches, ambiguous);
             break;
         }
-        //while (remaining > 0)
-        //{
-        //    matches += (adapterIterator->value & 0x03) == (readIterator->value & 0x03);
-        //    ambiguous += readIterator->value == NBase;
-        //    ++adapterIterator;
-        //    ++readIterator;
-        //    --remaining;
-        //}
         const float errorRate = static_cast<float>(overlap - matches - ambiguous) / static_cast<float>(overlap);
         if (errorRate < bestRes.errorRate || (errorRate == bestRes.errorRate && overlap > bestRes.overlap))
         {
