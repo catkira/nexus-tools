@@ -247,6 +247,18 @@ const __m128i ONE_128 = _mm_set1_epi8(1);
 const __m128i ZERO_128 = _mm_set1_epi8(0);
 const __m128i N_128 = _mm_set1_epi8(0x04);
 
+inline size_t popcnt64(__m128i value) noexcept
+{
+    value = _mm_sad_epu8(ZERO_128, value);
+    return _mm_extract_epi16(value, 0);
+}
+
+inline size_t popcnt128(__m128i value) noexcept
+{
+    value = _mm_sad_epu8(ZERO_128, value);
+    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
+}
+
 template <unsigned int N>
 struct compareAdapter
 {
@@ -267,12 +279,12 @@ struct compareAdapter
         const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
 
         // SSE2 code
-        //ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
-        //matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
         
         // SSE4.2 code 
-        ambiguous += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(NMask, ONE_128), 0));
-        matches += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(matchesMask, ONE_128), 0));
+        //ambiguous += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(NMask, ONE_128), 0));
+        //matches += _mm_popcnt_u32(_mm_extract_epi8(_mm_and_si128(matchesMask, ONE_128), 0));
 
         ++adapterIterator;
         ++readIterator;
@@ -293,18 +305,6 @@ struct compareAdapter<0>
     }
 };
 
-inline size_t popcnt64(__m128i value) noexcept
-{
-    value = _mm_sad_epu8(ZERO_128, value);
-    return _mm_extract_epi16(value, 0);
-}
-
-inline size_t popcnt128(__m128i value) noexcept
-{
-    value = _mm_sad_epu8(ZERO_128, value);
-    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
-}
-
 template <>
 struct compareAdapter<8>
 {
@@ -317,10 +317,10 @@ struct compareAdapter<8>
         const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
         const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
 
-        //ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
-        //matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
-        ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
-        matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_128));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_128));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
         readIterator += 8;
         adapterIterator += 8;
     }
@@ -364,10 +364,10 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
     AlignResult bestRes;
     //const auto NBase = ((seqan::Dna5)'N').value;
     //const unsigned char NBase = 0; // use this as long as seqan does not support constexpr initialization
-    const seqan::Iterator<const TSeq>::Type readBeginIterator = seqan::begin(read);
-    const seqan::Iterator<const TAdapter>::Type adapterBeginIterator = seqan::begin(adapter);
-    seqan::Iterator<const TSeq>::Type readIterator = readBeginIterator;
-    seqan::Iterator<const TAdapter>::Type adapterIterator = adapterBeginIterator;
+    const typename seqan::Iterator<const TSeq>::Type readBeginIterator = seqan::begin(read);
+    const typename seqan::Iterator<const TAdapter>::Type adapterBeginIterator = seqan::begin(adapter);
+    typename seqan::Iterator<const TSeq>::Type readIterator = readBeginIterator;
+    typename seqan::Iterator<const TAdapter>::Type adapterIterator = adapterBeginIterator;
     while (shiftPos <= shiftEndPos)
     {
         const unsigned int overlapNegativeShift = std::min(shiftPos + lenAdapter, lenRead);
