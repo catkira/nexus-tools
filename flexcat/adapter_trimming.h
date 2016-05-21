@@ -108,27 +108,34 @@ struct AdapterItem
     unsigned char id;
     bool anchored;
     bool reverse;
-    TAdapterSequence seq;
-    unsigned char len;
 
     AdapterItem() : adapterEnd(end3), overhang(0), id(0), anchored(false), reverse(false), len(0) {};
     AdapterItem(const TAdapterSequence &adapter) : adapterEnd(end3), overhang(0), id(0), anchored(false), reverse(false), seq(adapter), len(length(adapter)) {};
     AdapterItem(const TAdapterSequence &adapter, const AdapterEnd adapterEnd, const unsigned overhang, const unsigned id, const bool anchored, const bool reverse)
         : adapterEnd(adapterEnd), overhang(overhang), id(id), anchored(anchored), reverse(reverse), seq(adapter), len(length(adapter)) {};
 
+    void setSeq(TAdapterSequence newSeq) noexcept
+    { 
+        seq = newSeq; 
+        len = length(seq); 
+    };
+    const TAdapterSequence& getSeq() const noexcept
+    {
+        return seq;
+    };
+    unsigned char getLen() const noexcept
+    {
+        return len;
+    };
+    
     AdapterItem getReverseComplement() const noexcept
     {
         auto seqCopy = seq;
         return AdapterItem(ReverseComplement(seqCopy), adapterEnd, overhang, id, anchored, reverse);
     }
-
-
-    // the anchored matching mode should have the same functionality as cutadapt's anchored mode
-    // see http://cutadapt.readthedocs.org/en/latest/guide.html
-    // In anchored mode, the adapter has to start (3" adapter) or has to end (5" adapter) with the sequence
-    // The anchored mode is rarely used, at least for 3" adapters
-    // Todo: implement rooted mode
-
+private:
+    TAdapterSequence seq;
+    unsigned char len;
 };
 
 // Define scoring function type.
@@ -559,8 +566,8 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
                 (TStripAdapterDirection::value == adapterDirection::forward && adapterItem.reverse == true))
                 continue;
 
-            const auto& adapterSequence = adapterItem.seq;
-            const auto& lenAdapter = adapterItem.len;
+            const auto& adapterSequence = adapterItem.getSeq();
+            const auto lenAdapter = adapterItem.getLen();
 
             const int oppositeEndOverhang = adapterItem.anchored == true ? lenAdapter - lenSeq : adapterItem.overhang;
             const int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - spec.min_length;
@@ -614,7 +621,7 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
         removedTotalOld = removedTotal;
 
         // dont try more adapter trimming if the read is too short already
-        if (static_cast<TReadLen>(length(seq)) < spec.min_length)
+        if (static_cast<TReadLen>(lenSeq) < spec.min_length)
             return removedTotal;
     }
     return removedTotal;

@@ -287,7 +287,7 @@ void printStatistics(const ProgramParams& programParams, const TStats& generalSt
             else
                 outStream << " 5'";
             outStream << "-adapter, ";
-            outStream << generalStats.adapterTrimmingStats.numRemoved[adapterItem.id] << "x, " << adapterItem.seq << std::endl;
+            outStream << generalStats.adapterTrimmingStats.numRemoved[adapterItem.id] << "x, " << adapterItem.getSeq() << std::endl;
             ++i;
         }
         outStream << std::endl;
