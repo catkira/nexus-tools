@@ -263,14 +263,16 @@ const __m128i N_128 = _mm_set1_epi8('N');
 
 inline size_t popcnt64(__m128i value) noexcept
 {
-    value = _mm_sad_epu8(ZERO_128, value);
-    return _mm_extract_epi16(value, 0);
+    //value = _mm_sad_epu8(ZERO_128, value);
+    //return _mm_extract_epi16(value, 0);
+    return _mm_popcnt_u64(value.m128i_u64[0]);
 }
 
 inline size_t popcnt128(__m128i value) noexcept
 {
-    value = _mm_sad_epu8(ZERO_128, value);
-    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
+//    value = _mm_sad_epu8(ZERO_128, value);
+//    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
+    return _mm_popcnt_u64(value.m128i_u64[0]) + _mm_popcnt_u64(value.m128i_u64[1]);
 }
 
 template <unsigned int N>
