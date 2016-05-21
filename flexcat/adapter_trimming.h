@@ -85,38 +85,41 @@ namespace seqan {
     };
 }
 
-using TAdapterAlphabet = seqan::Dna5;
-using TAdapterSequence = seqan::String<TAdapterAlphabet>;
+using TAdapterSequence = std::string;
 
 struct AdapterItem;
 typedef std::vector< AdapterItem > AdapterSet;
-using TReverseComplement = STRING_REVERSE_COMPLEMENT<TAdapterAlphabet>::Type;
+
+std::string ReverseComplement(std::string str)
+{
+    // TODO implement function
+    return str;
+}
 
 struct AdapterItem
 {
-    using TAdapterSequence = seqan::String<TAdapterAlphabet>;
-
     enum AdapterEnd
     {
         end3,
         end5,
     };
     AdapterEnd adapterEnd;
-    unsigned int overhang;
-    unsigned id;
+    unsigned char overhang;
+    unsigned char id;
     bool anchored;
     bool reverse;
     TAdapterSequence seq;
+    unsigned char len;
 
-    AdapterItem() : adapterEnd(end3), overhang(0), id(0), anchored(false), reverse(false) {};
-    AdapterItem(const TAdapterSequence &adapter) : adapterEnd(end3), overhang(0), id(0), anchored(false), reverse(false), seq(adapter) {};
+    AdapterItem() : adapterEnd(end3), overhang(0), id(0), anchored(false), reverse(false), len(0) {};
+    AdapterItem(const TAdapterSequence &adapter) : adapterEnd(end3), overhang(0), id(0), anchored(false), reverse(false), seq(adapter), len(length(adapter)) {};
     AdapterItem(const TAdapterSequence &adapter, const AdapterEnd adapterEnd, const unsigned overhang, const unsigned id, const bool anchored, const bool reverse)
-        : adapterEnd(adapterEnd), overhang(overhang), id(id), anchored(anchored), reverse(reverse), seq(adapter) {};
+        : adapterEnd(adapterEnd), overhang(overhang), id(id), anchored(anchored), reverse(reverse), seq(adapter), len(length(adapter)) {};
 
     AdapterItem getReverseComplement() const noexcept
     {
         auto seqCopy = seq;
-        return AdapterItem(TReverseComplement(seqCopy), adapterEnd, overhang, id, anchored, reverse);
+        return AdapterItem(ReverseComplement(seqCopy), adapterEnd, overhang, id, anchored, reverse);
     }
 
 
@@ -133,15 +136,15 @@ typedef seqan::Score<int, seqan::ScoreMatrix<seqan::Dna5, seqan::AdapterScoringM
 
 struct AdapterMatchSettings
 {
-    AdapterMatchSettings(const int m, const int e, const double er, const unsigned int oh, const unsigned int times) : min_length(m), errors(e), overhang(oh), errorRate(er), times(times)
+    AdapterMatchSettings(const char m, const int e, const double er, const unsigned char oh, const unsigned char times) : min_length(m), errors(e), overhang(oh), errorRate(er), times(times)
     {}
     AdapterMatchSettings() : min_length(0), errors(0), overhang(0), errorRate(0), times(1) {};
 
-    unsigned int min_length; //The minimum length of the overlap.
+    unsigned char min_length; //The minimum length of the overlap.
     int errors;     //The maximum number of errors we allow.
-    unsigned int overhang;
+    unsigned char overhang;
     double errorRate;  //The maximum number of errors allowed per overlap
-    unsigned int times;
+    unsigned char times;
 };
 
 
@@ -175,17 +178,19 @@ unsigned getOverlap(TAlign& align) noexcept
     return length(source(row1)) - countTotalGaps(row2);
 }
 
-
+template <typename _TReadLen>
 struct AlignResult
 {
-    AlignResult() : score(std::numeric_limits<int>::min()), matches(0), ambiguous(0), overlap(0), errorRate(1), shiftPos(0) {};
-    int score;
-    unsigned int matches;
-    unsigned int mismatches;
-    unsigned int ambiguous;
-    unsigned int overlap;
+    static const typename std::make_unsigned<_TReadLen>::type noMatch = std::numeric_limits<std::make_unsigned<_TReadLen>::type>::min();
+
+    AlignResult() : score(std::numeric_limits<typename std::make_unsigned<_TReadLen>::type>::min()), matches(0), ambiguous(0), overlap(0), errorRate(1), shiftPos(0) {};
+    typename std::make_unsigned<_TReadLen>::type shiftPos;
+    typename std::make_unsigned<_TReadLen>::type score;
+    _TReadLen matches;
+    _TReadLen mismatches;
+    _TReadLen ambiguous;
+    _TReadLen overlap;
     float errorRate;
-    int shiftPos;
 };
 
 template <typename TAlign>
@@ -213,15 +218,14 @@ namespace AlignAlgorithm
 }
 
 
-template <typename TSeq, typename TAdapter>
-void alignPair(AlignResult &res, const TSeq& seq1, const TAdapter& seq2,
+template <typename TSeq, typename TAdapter, typename TAlignResult>
+void alignPair(TAlignResult &res, const TSeq& seq1, const TAdapter& seq2,
     const int leftOverhang, const int rightOverhang, const AlignAlgorithm::NeedlemanWunsch&) noexcept
 {
     seqan::Align<TSeq> align;
     seqan::resize(rows(align), 2);
     seqan::assignSource(row(align, 0), seq1);
     seqan::assignSource(row(align, 1), seq2);
-    const int noMatch = std::numeric_limits<int>::min();
 
     // dont allow gaps by setting the gap penalty high
     const TScore adapterScore(-100);
@@ -231,7 +235,7 @@ void alignPair(AlignResult &res, const TSeq& seq1, const TAdapter& seq2,
     const int shiftEndPos = length(seq1) - length(seq2) + rightOverhang;
     if (shiftEndPos < shiftStartPos)
     {
-        res.score = noMatch;
+        res.score = TAlignResult::noMatch;
         return;
     }
     // allow gaps on all corners, because we use banded alignment to constraint the search space
@@ -247,7 +251,8 @@ void alignPair(AlignResult &res, const TSeq& seq1, const TAdapter& seq2,
 const __m128i ONE_128 = _mm_set1_epi8(1);
 const __m128i ONE_8 = _mm_set1_epi64x(1);
 const __m128i ZERO_128 = _mm_set1_epi8(0);
-const __m128i N_128 = _mm_set1_epi8(0x04);
+//const __m128i N_128 = _mm_set1_epi8(0x04);
+const __m128i N_128 = _mm_set1_epi8('N');
 
 inline size_t popcnt64(__m128i value) noexcept
 {
@@ -264,18 +269,11 @@ inline size_t popcnt128(__m128i value) noexcept
 template <unsigned int N>
 struct compareAdapter
 {
-    //const auto NBase = ((seqan::Dna5)'N').value;
-    static const unsigned char NBase = 4; // use this as long as seqan does not support constexpr initialization
-
     template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
     inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
     {
-        //bool isN = (readIterator->value == NBase || adapterIterator->value == NBase);
-        //matches += ((adapterIterator->value == readIterator->value) && !isN);
-        //ambiguous += isN;
-
-        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(readIterator));
-        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(adapterIterator));
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
 
         const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
         const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
@@ -313,8 +311,8 @@ struct compareAdapter<8>
     template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
     inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
     {
-        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(readIterator));
-        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(adapterIterator));
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
 
         const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
         const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
@@ -334,8 +332,8 @@ struct compareAdapter<16>
     template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
     inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
     {
-        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(readIterator));
-        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(adapterIterator));
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
 
         const __m128i NMask = _mm_sub_epi8(_mm_set1_epi32(0), _mm_or_si128(_mm_cmpeq_epi8(read, N_128),_mm_cmpeq_epi8(adapter, N_128)));
         const __m128i matchesMask = _mm_sub_epi8(_mm_set1_epi32(0), _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
@@ -353,8 +351,8 @@ struct compareAdapter<16>
 - +1 for same base, -1 for mismatch, +0 for N
 - return score of the shift position, where the errorRate was minimal
 */
-template <typename TSeq, typename TAdapter>
-void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
+template <typename TSeq, typename TAdapter, typename TAlignResult>
+void alignPair(TAlignResult& ret, const TSeq& read, const TAdapter& adapter,
     const int leftOverhang, const int rightOverhang, const AlignAlgorithm::Menkuec&) noexcept
 {
     const auto lenRead = length(read);
@@ -363,19 +361,17 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
     const int shiftEndPos = lenRead - lenAdapter + rightOverhang;
     int shiftPos = shiftStartPos;
 
-    AlignResult bestRes;
-    //const auto NBase = ((seqan::Dna5)'N').value;
-    //const unsigned char NBase = 0; // use this as long as seqan does not support constexpr initialization
-    const typename seqan::Iterator<const TSeq>::Type readBeginIterator = seqan::begin(read);
-    const typename seqan::Iterator<const TAdapter>::Type adapterBeginIterator = seqan::begin(adapter);
-    typename seqan::Iterator<const TSeq>::Type readIterator = readBeginIterator;
-    typename seqan::Iterator<const TAdapter>::Type adapterIterator = adapterBeginIterator;
+    ret = TAlignResult();
+    const std::string::const_iterator readBeginIterator = read.begin();
+    const std::string::const_iterator adapterBeginIterator = adapter.begin();
+    std::string::const_iterator readIterator = readBeginIterator;
+    std::string::const_iterator adapterIterator = adapterBeginIterator;
     while (shiftPos <= shiftEndPos)
     {
-        const unsigned int overlapNegativeShift = std::min(shiftPos + lenAdapter, lenRead);
-        const unsigned int overlapPositiveShift = std::min(lenRead - shiftPos, lenAdapter);
-        const unsigned int overlap = std::min(overlapNegativeShift, overlapPositiveShift);
-        const unsigned int overlapStart = std::max(shiftPos, 0);
+        const unsigned int overlapNegativeShift = std::min<unsigned int>(shiftPos + lenAdapter, lenRead);
+        const unsigned int overlapPositiveShift = std::min<unsigned int>(lenRead - shiftPos, lenAdapter);
+        const unsigned int overlap = std::min<unsigned int>(overlapNegativeShift, overlapPositiveShift);
+        const unsigned int overlapStart = std::max<int>(shiftPos, 0);
         unsigned int matches = 0;
         unsigned int ambiguous = 0;
         unsigned int remaining = overlap;
@@ -390,7 +386,6 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
         switch (remaining)
         {
         case 0:
-            compareAdapter<0>::apply(readIterator, adapterIterator, matches, ambiguous);
             break;
         case 1:
             compareAdapter<1>::apply(readIterator, adapterIterator, matches, ambiguous);
@@ -439,28 +434,27 @@ void alignPair(AlignResult& ret, const TSeq& read, const TAdapter& adapter,
             break;
         }
         const float errorRate = static_cast<float>(overlap - matches - ambiguous) / static_cast<float>(overlap);
-        if (errorRate < bestRes.errorRate || (errorRate == bestRes.errorRate && overlap > bestRes.overlap))
+        if (errorRate < ret.errorRate || (errorRate == ret.errorRate && overlap > ret.overlap))
         {
-            bestRes.matches = matches;
-            bestRes.ambiguous = ambiguous;
-            bestRes.errorRate = errorRate;
-            bestRes.shiftPos = shiftPos;
-            bestRes.overlap = overlap;
+            ret.matches = matches;
+            ret.ambiguous = ambiguous;
+            ret.errorRate = errorRate;
+            ret.shiftPos = shiftPos;
+            ret.overlap = overlap;
         }
         ++shiftPos;
     }
-    if (bestRes.matches != 0)
+    if (ret.matches != 0)
     {
-        bestRes.mismatches = bestRes.overlap - bestRes.matches - bestRes.ambiguous;
-        bestRes.score = 2 * bestRes.matches - bestRes.overlap + bestRes.ambiguous;
+        ret.mismatches = ret.overlap - ret.matches - ret.ambiguous;
+        ret.score = 2 * ret.matches - ret.overlap + ret.ambiguous;
     }
-    ret = bestRes;
 }
 
 
 
-template <typename TSeq, typename TAdapter>
-void alignPair(AlignResult &res, const TSeq& seq1, const TAdapter& seq2, const AlignAlgorithm::NeedlemanWunsch&) noexcept
+template <typename TSeq, typename TAdapter, typename TAlignResult>
+void alignPair(TAlignResult &res, const TSeq& seq1, const TAdapter& seq2, const AlignAlgorithm::NeedlemanWunsch&) noexcept
 {
     seqan::Align<TSeq> align;
     seqan::resize(rows(align), 2);
@@ -488,7 +482,7 @@ unsigned stripPair(TSeq& seq1, TSeq& seq2) noexcept
     using TAlphabet = typename seqan::Value<TSeq>::Type;
     using TReverseComplement = typename STRING_REVERSE_COMPLEMENT<TAlphabet>::Type;
     TReverseComplement mod(seq2);
-    AlignResult ret;
+    AlignResult<unsigned int> ret;
     alignPair(ret, seq1, mod, AlignAlgorithm::NeedlemanWunsch());
     const auto& score = ret.score;
     // Use the overlap of the two sequences to determine the end position.
@@ -543,20 +537,20 @@ struct StripAdapterDirection
     static const bool value = _direction;
 };
 
-template <typename TSeq, typename TAdapters, typename TStripAdapterDirection>
-unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& adapters, AdapterMatchSettings const& spec,
+template <typename TSeq, typename TAdapters, typename TReadLen, typename TStripAdapterDirection>
+unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapters const& adapters, AdapterMatchSettings const& spec,
     const TStripAdapterDirection&)
 {
     AlignAlgorithm::Menkuec alignAlgorithm;
 
-    unsigned removed{ 0 };
-    AlignResult alignResult;
-    const int noMatch = std::numeric_limits<int>::min();
-    unsigned removedOld = 0;
+    unsigned removedTotal{ 0 };
+    AlignResult<TReadLen> alignResult;
+    unsigned removedTotalOld = 0;
+    TReadLen lenSeq = length(seq);
 
     for (unsigned int n = 0;n < spec.times; ++n)
     {
-        alignResult.score = noMatch;
+        alignResult.score = AlignResult<TReadLen>::noMatch;
         for (auto const& adapterItem : adapters)
         {
             //if (static_cast<unsigned>(length(adapterItem.seq)) < spec.min_length)
@@ -566,20 +560,19 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
                 continue;
 
             const auto& adapterSequence = adapterItem.seq;
-            const auto lenAdapter = length(adapterSequence);
-            const auto lenSeq = length(seq);
+            const auto& lenAdapter = adapterItem.len;
 
-            const unsigned int oppositeEndOverhang = adapterItem.anchored == true ? lenAdapter - lenSeq : adapterItem.overhang;
-            const unsigned int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - spec.min_length;
+            const int oppositeEndOverhang = adapterItem.anchored == true ? lenAdapter - lenSeq : adapterItem.overhang;
+            const int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - spec.min_length;
             if (adapterItem.adapterEnd == AdapterItem::end3)
-                alignPair(alignResult, seqan::Dna5String(seq), adapterSequence, oppositeEndOverhang, sameEndOverhang, alignAlgorithm);
+                alignPair(alignResult, std::string(seqan::CharString(seq).data_begin, lenSeq), adapterSequence, oppositeEndOverhang, sameEndOverhang, alignAlgorithm);
             else
-                alignPair(alignResult, seqan::Dna5String(seq), adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
+                alignPair(alignResult, std::string(seqan::CharString(seq).data_begin, lenSeq), adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
             if (isMatch(alignResult.overlap, alignResult.mismatches, spec))
             {
-                unsigned eraseStart = 0;
-                unsigned eraseEnd = 0;
+                TReadLen eraseStart = 0;
+                TReadLen eraseEnd = 0;
                 if (adapterItem.adapterEnd == AdapterItem::end3)
                 {
                     eraseStart = alignResult.shiftPos;
@@ -588,14 +581,16 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
                 else
                 {
                     eraseStart = 0;
-                    eraseEnd = std::min<unsigned>(lenSeq, alignResult.shiftPos + lenAdapter);
+                    eraseEnd = std::min<TReadLen>(lenSeq, alignResult.shiftPos + lenAdapter);
                 }
 
                 seqan::erase(seq, eraseStart, eraseEnd);
-                removed += eraseEnd - eraseStart;
+                auto removed = eraseEnd - eraseStart;
+                removedTotal += removed;
+                lenSeq -= removed;
 
                 // update statistics        
-                const auto statisticLen = eraseEnd - eraseStart;
+                const auto statisticLen = removed;
                 if (stats.removedLength.size() < statisticLen)
                     stats.removedLength.resize(statisticLen);
                 if (stats.removedLength[statisticLen - 1].size() < alignResult.mismatches + 1)
@@ -614,21 +609,21 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats& stats, TAdapters const& a
                 stats.minOverlap = std::min(stats.minOverlap, alignResult.overlap);
             }
         }
-        if (removed == removedOld)
-            return removed;
-        removedOld = removed;
+        if (removedTotal == removedTotalOld)
+            return removedTotal;
+        removedTotalOld = removedTotal;
 
         // dont try more adapter trimming if the read is too short already
-        if (static_cast<unsigned>(length(seq)) < spec.min_length)
-            return removed;     
+        if (static_cast<TReadLen>(length(seq)) < spec.min_length)
+            return removedTotal;
     }
-    return removed;
+    return removedTotal;
 }
 
-template < template <typename> class TRead, typename TSeq, typename TAdaptersArray, typename TSpec, typename TTagAdapter,
+template < template <typename> class TRead, typename TSeq, typename TAdaptersArray, typename TAdapterTrimmingStats, typename TSpec, typename TTagAdapter,
     typename = std::enable_if_t<std::is_same<TRead<TSeq>, Read<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplex<TSeq>>::value> >
     void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TAdaptersArray const& adapters, TSpec const& spec, const bool pairedNoAdapterFile,
-        AdapterTrimmingStats& stats, TTagAdapter, bool = false) noexcept(!TTagAdapter::value)
+        TAdapterTrimmingStats& stats, TTagAdapter, bool = false) noexcept(!TTagAdapter::value)
 {
     (void)pairedNoAdapterFile;
     for (auto& read : reads)
@@ -643,10 +638,10 @@ template < template <typename> class TRead, typename TSeq, typename TAdaptersArr
 }
 
 // pairedEnd adapters will be trimmed in single mode, each seperately
-template < template <typename> class TRead, typename TSeq, typename TAdaptersArray, typename TSpec, typename TTagAdapter,
+template < template <typename> class TRead, typename TSeq, typename TAdaptersArray, typename TAdapterTrimmingStats, typename TSpec, typename TTagAdapter,
     typename = std::enable_if_t<std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value> >
     void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TAdaptersArray const& adapters, TSpec const& spec, const bool pairedNoAdapterFile,
-        AdapterTrimmingStats& stats, TTagAdapter) noexcept(!TTagAdapter::value)
+        TAdapterTrimmingStats& stats, TTagAdapter) noexcept(!TTagAdapter::value)
 {
     for (auto& read : reads)
     {

@@ -182,7 +182,7 @@ SEQAN_DEFINE_TEST(match_test)
 
 SEQAN_DEFINE_TEST(strip_adapter_test)
 {
-    typedef seqan::String<seqan::Dna5Q> TAda;
+    typedef std::string TAda;
     using AdapterSet = std::vector<AdapterItem>;
     AdapterSet adapterSet;
     using TRead = Read<seqan::Dna5QString>;
@@ -194,7 +194,7 @@ SEQAN_DEFINE_TEST(strip_adapter_test)
 	int len = length(read.seq);
     // overlap=4, error_rate = 0.2, times = 1
     AdapterMatchSettings matchSettings(4, 0, 0.2, 0, 1);
-    AdapterTrimmingStats stats;
+    AdapterTrimmingStats<unsigned char> stats;
     stats.numRemoved.resize(1);
  
     int removed = stripAdapter(read.seq, stats, AdapterSet{ AdapterItem(ada, AdapterItem::end3, 0,0, false, false) }, matchSettings, StripAdapterDirection<adapterDirection::forward>());
@@ -275,7 +275,7 @@ SEQAN_DEFINE_TEST(align_adapter_test)
 
 	TSeq seq = TSeq("AAAAAAAAAATTTTT");
 	TAda ada = TAda("TTTTTTTTTTT");
-    AlignResult result;
+    AlignResult<unsigned char> result;
     alignPair(result, seq, ada, AlignAlgorithm::NeedlemanWunsch());
 	SEQAN_ASSERT_EQ(result.score, 5);
 
