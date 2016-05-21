@@ -544,21 +544,71 @@ struct StripAdapterDirection
     static const bool value = _direction;
 };
 
+void Dna5ToStdString(std::string& dest, const seqan::Dna5QString &source) noexcept
+{
+    auto len = length(source);
+    dest.resize(len);
+    for(size_t n = 0; n < len; n++)
+    {
+        switch (((unsigned char)source[n]) & 0x07)
+        {
+        case 0:
+            dest[n] = 'A';
+            break;
+        case 1:
+            dest[n] = 'C';
+            break;
+        case 2:
+            dest[n] = 'G';
+            break;
+        case 3:
+            dest[n] = 'T';
+            break;
+        case 4:
+            dest[n] = 'N';
+            break;
+        }
+    }
+}
+
+template <typename TStats>
+struct TlsBlockAdapterTrimming
+{
+    TlsBlockAdapterTrimming(TStats& stats, const AdapterTrimmingParams& params) : stats(stats), params(params) {};
+    const AdapterTrimmingParams& params; // can use ref here, bcs read only does not cause false sharing
+    TStats& stats;
+    std::string tlsString;
+};
+
+// convenience wrapper
 template <typename TSeq, typename TAdapters, typename TReadLen, typename TStripAdapterDirection>
 unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapters const& adapters, AdapterMatchSettings const& spec,
-    const TStripAdapterDirection&)
+    const TStripAdapterDirection& stripDirection)
+{
+    AdapterTrimmingParams params;
+    params.adapters = adapters;
+    params.mode = spec;
+    TlsBlockAdapterTrimming<AdapterTrimmingStats<TReadLen>> tlsBlock(stats, params);
+    return stripAdapter(seq, tlsBlock, stripDirection);
+}
+
+template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock>
+unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&)
 {
     AlignAlgorithm::Menkuec alignAlgorithm;
 
+    using TReadLen = decltype(tlsBlock.stats.overlapSum);
     unsigned removedTotal{ 0 };
-    AlignResult<TReadLen> alignResult;
+    AlignResult<TReadLen> alignResult;  // small object, created on stack
     unsigned removedTotalOld = 0;
     TReadLen lenSeq = length(seq);
 
-    for (unsigned int n = 0;n < spec.times; ++n)
+    Dna5ToStdString(tlsBlock.tlsString, seq);
+
+    for (unsigned int n = 0;n < tlsBlock.params.mode.times; ++n)
     {
         alignResult.score = AlignResult<TReadLen>::noMatch;
-        for (auto const& adapterItem : adapters)
+        for (auto const& adapterItem : tlsBlock.params.adapters)
         {
             //if (static_cast<unsigned>(length(adapterItem.seq)) < spec.min_length)
               //  continue;
@@ -570,13 +620,13 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
             const auto lenAdapter = adapterItem.getLen();
 
             const int oppositeEndOverhang = adapterItem.anchored == true ? lenAdapter - lenSeq : adapterItem.overhang;
-            const int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - spec.min_length;
+            const int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - tlsBlock.params.mode.min_length;
             if (adapterItem.adapterEnd == AdapterItem::end3)
-                alignPair(alignResult, std::string(seqan::CharString(seq).data_begin, lenSeq), adapterSequence, oppositeEndOverhang, sameEndOverhang, alignAlgorithm);
+                alignPair(alignResult, tlsBlock.tlsString, adapterSequence, oppositeEndOverhang, sameEndOverhang, alignAlgorithm);
             else
-                alignPair(alignResult, std::string(seqan::CharString(seq).data_begin, lenSeq), adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
+                alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.mismatches, spec))
+            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode))
             {
                 TReadLen eraseStart = 0;
                 TReadLen eraseEnd = 0;
@@ -592,28 +642,29 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
                 }
 
                 seqan::erase(seq, eraseStart, eraseEnd);
+                tlsBlock.tlsString.erase(eraseStart, eraseEnd);
                 auto removed = eraseEnd - eraseStart;
                 removedTotal += removed;
                 lenSeq -= removed;
 
                 // update statistics        
                 const auto statisticLen = removed;
-                if (stats.removedLength.size() < statisticLen)
-                    stats.removedLength.resize(statisticLen);
-                if (stats.removedLength[statisticLen - 1].size() < alignResult.mismatches + 1)
-                    stats.removedLength[statisticLen - 1].resize(alignResult.mismatches + 1);
-                ++stats.removedLength[statisticLen - 1][alignResult.mismatches];
+                if (tlsBlock.stats.removedLength.size() < statisticLen)
+                    tlsBlock.stats.removedLength.resize(statisticLen);
+                if (tlsBlock.stats.removedLength[statisticLen - 1].size() < alignResult.mismatches + 1)
+                    tlsBlock.stats.removedLength[statisticLen - 1].resize(alignResult.mismatches + 1);
+                ++tlsBlock.stats.removedLength[statisticLen - 1][alignResult.mismatches];
 
-                if (stats.numRemoved.size() < adapterItem.id + 1)
+                if (tlsBlock.stats.numRemoved.size() < adapterItem.id + 1)
                 {
                     std::cout << "error: numRemoved too small!" << std::endl;
                     throw(std::runtime_error("error: numRemoved too small!"));
                 }
-                ++stats.numRemoved[adapterItem.id];
+                ++tlsBlock.stats.numRemoved[adapterItem.id];
 
-                stats.overlapSum += alignResult.overlap;
-                stats.maxOverlap = std::max(stats.maxOverlap, alignResult.overlap);
-                stats.minOverlap = std::min(stats.minOverlap, alignResult.overlap);
+                tlsBlock.stats.overlapSum += alignResult.overlap;
+                tlsBlock.stats.maxOverlap = std::max(tlsBlock.stats.maxOverlap, alignResult.overlap);
+                tlsBlock.stats.minOverlap = std::min(tlsBlock.stats.minOverlap, alignResult.overlap);
             }
         }
         if (removedTotal == removedTotalOld)
@@ -621,23 +672,21 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
         removedTotalOld = removedTotal;
 
         // dont try more adapter trimming if the read is too short already
-        if (static_cast<TReadLen>(lenSeq) < spec.min_length)
+        if (static_cast<TReadLen>(lenSeq) < tlsBlock.params.mode.min_length)
             return removedTotal;
     }
     return removedTotal;
 }
 
-template < template <typename> class TRead, typename TSeq, typename TAdaptersArray, typename TAdapterTrimmingStats, typename TSpec, typename TTagAdapter,
+template < template <typename> class TRead, typename TSeq, typename TlsBlock, typename TTagAdapter,
     typename = std::enable_if_t<std::is_same<TRead<TSeq>, Read<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplex<TSeq>>::value> >
-    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TAdaptersArray const& adapters, TSpec const& spec, const bool pairedNoAdapterFile,
-        TAdapterTrimmingStats& stats, TTagAdapter, bool = false) noexcept(!TTagAdapter::value)
+    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TlsBlock& tlsBlock, TTagAdapter, bool = false) noexcept(!TTagAdapter::value)
 {
-    (void)pairedNoAdapterFile;
     for (auto& read : reads)
     {
         if (seqan::empty(read.seq))
             continue;
-        const unsigned over = stripAdapter(read.seq, stats, adapters, spec, StripAdapterDirection<adapterDirection::forward>());
+        const unsigned over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>());
         if (TTagAdapter::value && over != 0)
             insertAfterFirstToken(read.id, ":AdapterRemoved");
     }
@@ -645,25 +694,24 @@ template < template <typename> class TRead, typename TSeq, typename TAdaptersArr
 }
 
 // pairedEnd adapters will be trimmed in single mode, each seperately
-template < template <typename> class TRead, typename TSeq, typename TAdaptersArray, typename TAdapterTrimmingStats, typename TSpec, typename TTagAdapter,
+template < template <typename> class TRead, typename TSeq, typename TlsBlock, typename TTagAdapter,
     typename = std::enable_if_t<std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value> >
-    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TAdaptersArray const& adapters, TSpec const& spec, const bool pairedNoAdapterFile,
-        TAdapterTrimmingStats& stats, TTagAdapter) noexcept(!TTagAdapter::value)
+    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TlsBlock& tlsBlock, TTagAdapter) noexcept(!TTagAdapter::value)
 {
     for (auto& read : reads)
     {
         if (seqan::empty(read.seq))
             continue;
         unsigned over = 0;
-        if (pairedNoAdapterFile)
+        if (tlsBlock.params.pairedNoAdapterFile)
         {
             stripPair(read.seq, read.seqRev);
         }
         else
         {
-            over = stripAdapter(read.seq, stats, adapters, spec, StripAdapterDirection<adapterDirection::forward>());
+            over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>());
             if (!seqan::empty(read.seqRev))
-                over += stripAdapter(read.seqRev, stats, adapters, spec, StripAdapterDirection<adapterDirection::reverse>());
+                over += stripAdapter(read.seqRev, tlsBlock, StripAdapterDirection<adapterDirection::reverse>());
         }
         if (TTagAdapter::value && over != 0)
             insertAfterFirstToken(read.id, ":AdapterRemoved");

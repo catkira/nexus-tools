@@ -66,7 +66,9 @@ struct GeneralStats
     double processTime;
     double ioTime;
     std::vector<unsigned int> matchedBarcodeReads;
-    AdapterTrimmingStats<TReadLen> adapterTrimmingStats;
+
+    using TAdapterTrimmingStats = AdapterTrimmingStats<TReadLen>;
+    TAdapterTrimmingStats adapterTrimmingStats;
 
     GeneralStats(): removedN(0), removedDemultiplex(0), removedQuality(0), uncalledBases(0), removedShort(0), readCount(0), processTime(0), ioTime(0) {};
     GeneralStats(unsigned int N, unsigned int numAdapters) : GeneralStats() 

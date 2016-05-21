@@ -97,21 +97,21 @@ inline void loadMultiplex(std::vector<TRead<TSeq>>& reads, unsigned records, seq
 // PROGRAM STAGES ---------------------
 //Preprocessing Stage
 template<typename TReadSet, typename TStats>
-void preprocessingStage(const ProcessingParams& processingParams, TReadSet& readSet, TStats& generalStats)
+void preprocessingStage(const ProcessingParams& processingParams, TReadSet& readSet, TStats& stats)
 {
     if (processingParams.runPre)
     {
         //Trimming and filtering
         if (processingParams.trimLeft + processingParams.trimRight + processingParams.minLen != 0)
             preTrim(readSet, processingParams.trimLeft, processingParams.trimRight,
-                processingParams.minLen, processingParams.tagTrimming, generalStats);
+                processingParams.minLen, processingParams.tagTrimming, stats);
        // Detecting uncalled Bases
         if (processingParams.runCheckUncalled)
         {
             if (processingParams.runSubstitute)
-                processN(readSet, processingParams.uncalled, processingParams.substitute, generalStats);
+                processN(readSet, processingParams.uncalled, processingParams.substitute, stats);
             else
-                processN(readSet, processingParams.uncalled, NoSubstitute(), generalStats);
+                processN(readSet, processingParams.uncalled, NoSubstitute(), stats);
         }
     }
 }
@@ -119,33 +119,33 @@ void preprocessingStage(const ProcessingParams& processingParams, TReadSet& read
 // DEMULTIPLEXING
 template <typename TRead, typename TFinder, typename TStats>
 int demultiplexingStage(const DemultiplexingParams& params, std::vector<TRead>& reads, TFinder& esaFinder,
-    TStats& generalStats)
+    TStats& stats)
 {
     if (!params.run)
         return 0;
     if (!params.approximate)
     {
-        demultiplex(reads, esaFinder, params.hardClip, generalStats, ExactBarcodeMatching(), params.exclude);
+        demultiplex(reads, esaFinder, params.hardClip, stats, ExactBarcodeMatching(), params.exclude);
     }
     else
     {
-        if (!check(reads, params.barcodes, generalStats))            // On Errors with barcodes return 1;
+        if (!check(reads, params.barcodes, stats))            // On Errors with barcodes return 1;
             return 1;
-        demultiplex(reads, esaFinder, params.hardClip, generalStats, ApproximateBarcodeMatching(), params.exclude);
+        demultiplex(reads, esaFinder, params.hardClip, stats, ApproximateBarcodeMatching(), params.exclude);
     }
     return 0;
 }
 
 // ADAPTER TRIMMING
-template <typename TRead, typename TGeneralStats>
-void adapterTrimmingStage(const AdapterTrimmingParams& params, std::vector<TRead>& reads, TGeneralStats& stats)
+template <typename TRead, typename TlsBlock>
+void adapterTrimmingStage(std::vector<TRead>& reads, TlsBlock& tlsBlock)
 {
-    if (!params.run)
+    if (!tlsBlock.params.run)
         return;
-    if(params.tag)
-        stripAdapterBatch(reads, params.adapters, params.mode, params.pairedNoAdapterFile, stats.adapterTrimmingStats, TagAdapter<true>());
+    if(tlsBlock.params.tag)
+        stripAdapterBatch(reads, tlsBlock, TagAdapter<true>());
     else
-        stripAdapterBatch(reads, params.adapters, params.mode, params.pairedNoAdapterFile, stats.adapterTrimmingStats, TagAdapter<false>());
+        stripAdapterBatch(reads, tlsBlock, TagAdapter<false>());
 }
 
 // QUALITY TRIMMING
@@ -382,15 +382,16 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     };
 
     auto transformer = [&](auto reads){
-        TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
-        generalStats.readCount = reads->size();
-        preprocessingStage(processingParams, *reads, generalStats);
-        if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, generalStats) != 0)
+        TStats stats = TStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
+        TlsBlockAdapterTrimming<TStats::TAdapterTrimmingStats> tlsBlock(stats.adapterTrimmingStats, adapterTrimmingParams);
+        stats.readCount = reads->size();
+        preprocessingStage(processingParams, *reads, stats);
+        if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, stats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
-        adapterTrimmingStage(adapterTrimmingParams, *reads, generalStats);
-        qualityTrimmingStage(qualityTrimmingParams, *reads, generalStats);
-        postprocessingStage(processingParams, *reads, generalStats);
-        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(generalStats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, generalStats));
+        adapterTrimmingStage(*reads, tlsBlock);
+        qualityTrimmingStage(qualityTrimmingParams, *reads, stats);
+        postprocessingStage(processingParams, *reads, stats);
+        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(stats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, stats));
     };
 
     TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
