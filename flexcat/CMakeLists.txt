@@ -92,7 +92,7 @@ set_target_properties (flexcatFilter PROPERTIES COMPILE_DEFINITIONS "FLEX_PROG=F
 
 # Set CXX flags 
 if (NOT MSVC)
-set (CMAKE_CXX_FLAGS "-pthread ${CMAKE_CXX_FLAGS}")
+set (CMAKE_CXX_FLAGS "-march=corei7-avx -mavx2 -pthread ${CMAKE_CXX_FLAGS}")
 endif (NOT MSVC)
 
 set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${SEQAN_CXX_FLAGS} ${CXX11_CXX_FLAGS} ${CXX14_CXX_FLAGS}")

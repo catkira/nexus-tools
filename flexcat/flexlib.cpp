@@ -383,7 +383,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
     auto transformer = [&](auto reads){
         TStats stats = TStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
-        TlsBlockAdapterTrimming<TStats::TAdapterTrimmingStats> tlsBlock(stats.adapterTrimmingStats, adapterTrimmingParams);
+        TlsBlockAdapterTrimming<typename TStats::TAdapterTrimmingStats> tlsBlock(stats.adapterTrimmingStats, adapterTrimmingParams);
         stats.readCount = reads->size();
         preprocessingStage(processingParams, *reads, stats);
         if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, stats) != 0)

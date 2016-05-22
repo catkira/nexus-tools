@@ -188,15 +188,15 @@ unsigned getOverlap(TAlign& align) noexcept
 template <typename _TReadLen>
 struct AlignResult
 {
-    static const typename std::make_unsigned<_TReadLen>::type noMatch = std::numeric_limits<std::make_unsigned<_TReadLen>::type>::min();
+    static const typename std::make_signed<_TReadLen>::type noMatch = std::numeric_limits<typename std::make_signed<_TReadLen>::type>::min();
 
-    AlignResult() : score(std::numeric_limits<typename std::make_unsigned<_TReadLen>::type>::min()), matches(0), ambiguous(0), overlap(0), errorRate(1), shiftPos(0) {};
-    typename std::make_unsigned<_TReadLen>::type shiftPos;
-    typename std::make_unsigned<_TReadLen>::type score;
-    _TReadLen matches;
-    _TReadLen mismatches;
-    _TReadLen ambiguous;
-    _TReadLen overlap;
+    AlignResult() : shiftPos(0), score(std::numeric_limits<typename std::make_signed<_TReadLen>::type>::min()), matches(0), ambiguous(0), overlap(0), errorRate(1) {};
+    typename std::make_signed<_TReadLen>::type shiftPos;
+    typename std::make_signed<_TReadLen>::type score;
+    typename std::make_unsigned<_TReadLen>::type matches;
+    typename std::make_unsigned<_TReadLen>::type mismatches;
+    typename std::make_unsigned<_TReadLen>::type ambiguous;
+    typename std::make_unsigned<_TReadLen>::type overlap;
     float errorRate;
 };
 
@@ -263,13 +263,12 @@ const __m128i ONE_40 = _mm_set1_epi64x(0x0101010101);
 const __m128i ONE_48 = _mm_set1_epi64x(0x010101010101);
 const __m128i ONE_56 = _mm_set1_epi64x(0x01010101010101);
 const __m128i ONE_128 = _mm_set1_epi8(1);
-const __m128i ZERO_128 = _mm_set1_epi8(0);
-//const __m128i N_128 = _mm_set1_epi8(0x04);
-const __m128i N_128 = _mm_set1_epi8('N');
-
 const __m256i ONE_256 = _mm256_set1_epi8(1);
+
+const __m128i ZERO_128 = _mm_set1_epi8(0);
 const __m256i ZERO_256 = _mm256_set1_epi8(0);
 //const __m128i N_128 = _mm_set1_epi8(0x04);
+const __m128i N_128 = _mm_set1_epi8('N');
 const __m256i N_256 = _mm256_set1_epi8('N');
 
 // vector access to SSE registers is a microsoft specialty
@@ -307,10 +306,10 @@ inline size_t popcnt256(__m256i value) noexcept
         _mm_popcnt_u64(value.m256i_u64[2]) +
         _mm_popcnt_u64(value.m256i_u64[3]);
 #else
-    return _mm_popcnt_u64(_mm_extract_epi64(value, 0)) +
-        _mm_popcnt_u64(_mm_extract_epi64(value, 1)) +
-        _mm_popcnt_u64(_mm_extract_epi64(value, 2)) +
-        _mm_popcnt_u64(_mm_extract_epi64(value, 3));
+    return _mm_popcnt_u64(_mm256_extract_epi64(value, 0)) +
+        _mm_popcnt_u64(_mm256_extract_epi64(value, 1)) +
+        _mm_popcnt_u64(_mm256_extract_epi64(value, 2)) +
+        _mm_popcnt_u64(_mm256_extract_epi64(value, 3));
 #endif
 }
 
@@ -509,8 +508,8 @@ struct compareAdapter<16>
         const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
         const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
 
-        const __m128i NMask = _mm_sub_epi8(_mm_set1_epi32(0), _mm_or_si128(_mm_cmpeq_epi8(read, N_128),_mm_cmpeq_epi8(adapter, N_128)));
-        const __m128i matchesMask = _mm_sub_epi8(_mm_set1_epi32(0), _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128),_mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
 
         ambiguous += popcnt128(_mm_and_si128(NMask, ONE_128));
         matches += popcnt128(_mm_and_si128(matchesMask, ONE_128));
@@ -528,8 +527,8 @@ struct compareAdapter<32>
         const __m256i read = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&(*readIterator)));
         const __m256i adapter = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&(*adapterIterator)));
 
-        const __m256i NMask = _mm256_sub_epi8(_mm256_set1_epi32(0), _mm256_or_si256(_mm256_cmpeq_epi8(read, N_256), _mm256_cmpeq_epi8(adapter, N_256)));
-        const __m256i matchesMask = _mm256_sub_epi8(_mm256_set1_epi32(0), _mm256_or_si256(_mm256_cmpeq_epi8(read, adapter), NMask));
+        const __m256i NMask = _mm256_sub_epi8(ZERO_256, _mm256_or_si256(_mm256_cmpeq_epi8(read, N_256), _mm256_cmpeq_epi8(adapter, N_256)));
+        const __m256i matchesMask = _mm256_sub_epi8(ZERO_256, _mm256_or_si256(_mm256_cmpeq_epi8(read, adapter), NMask));
 
         ambiguous += popcnt256(_mm256_and_si256(NMask, ONE_256));
         matches += popcnt256(_mm256_and_si256(matchesMask, ONE_256));
@@ -747,8 +746,9 @@ template <typename TStats>
 struct TlsBlockAdapterTrimming
 {
     TlsBlockAdapterTrimming(TStats& stats, const AdapterTrimmingParams& params) : stats(stats), params(params) {};
-    const AdapterTrimmingParams& params; // can use ref here, bcs read only does not cause false sharing
+
     TStats& stats;
+    const AdapterTrimmingParams& params; // can use ref here, bcs read only does not cause false sharing
     std::string tlsString;
 };
 
@@ -815,7 +815,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
 
                 seqan::erase(seq, eraseStart, eraseEnd);
                 tlsBlock.tlsString.erase(eraseStart, eraseEnd);
-                auto removed = eraseEnd - eraseStart;
+                TReadLen removed = eraseEnd - eraseStart;
                 removedTotal += removed;
                 lenSeq -= removed;
 
@@ -823,11 +823,11 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
                 const auto statisticLen = removed;
                 if (tlsBlock.stats.removedLength.size() < statisticLen)
                     tlsBlock.stats.removedLength.resize(statisticLen);
-                if (tlsBlock.stats.removedLength[statisticLen - 1].size() < alignResult.mismatches + 1)
+                if (tlsBlock.stats.removedLength[statisticLen - 1].size() < static_cast<size_t>(alignResult.mismatches + 1))
                     tlsBlock.stats.removedLength[statisticLen - 1].resize(alignResult.mismatches + 1);
                 ++tlsBlock.stats.removedLength[statisticLen - 1][alignResult.mismatches];
 
-                if (tlsBlock.stats.numRemoved.size() < adapterItem.id + 1)
+                if (tlsBlock.stats.numRemoved.size() < static_cast<size_t>(adapterItem.id + 1))
                 {
                     std::cout << "error: numRemoved too small!" << std::endl;
                     throw(std::runtime_error("error: numRemoved too small!"));
