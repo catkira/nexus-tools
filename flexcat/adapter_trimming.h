@@ -272,29 +272,46 @@ const __m256i ZERO_256 = _mm256_set1_epi8(0);
 //const __m128i N_128 = _mm_set1_epi8(0x04);
 const __m256i N_256 = _mm256_set1_epi8('N');
 
+// vector access to SSE registers is a microsoft specialty
+#ifdef _MSC_VER
+    #define VECTOR_ACCESS
+#endif
 
 inline size_t popcnt64(__m128i value) noexcept
 {
     //value = _mm_sad_epu8(ZERO_128, value);
     //return _mm_extract_epi16(value, 0);
+#ifdef VECTOR_ACCESS
     return _mm_popcnt_u64(value.m128i_u64[0]);
+#else
+    return _mm_popcnt_u64(_mm_extract_epi64(value,0));
+#endif
 }
 
 inline size_t popcnt128(__m128i value) noexcept
 {
 //    value = _mm_sad_epu8(ZERO_128, value);
 //    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
+#ifdef VECTOR_ACCESS
     return _mm_popcnt_u64(value.m128i_u64[0]) + _mm_popcnt_u64(value.m128i_u64[1]);
+#else
+    return _mm_popcnt_u64(_mm_extract_epi64(value, 0)) + _mm_popcnt_u64(_mm_extract_epi64(value, 1));
+#endif
 }
 
 inline size_t popcnt256(__m256i value) noexcept
 {
-    //    value = _mm_sad_epu8(ZERO_128, value);
-    //    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
+#ifdef VECTOR_ACCESS
     return _mm_popcnt_u64(value.m256i_u64[0]) +
         _mm_popcnt_u64(value.m256i_u64[1]) +
         _mm_popcnt_u64(value.m256i_u64[2]) +
         _mm_popcnt_u64(value.m256i_u64[3]);
+#else
+    return _mm_popcnt_u64(_mm_extract_epi64(value, 0)) +
+        _mm_popcnt_u64(_mm_extract_epi64(value, 1)) +
+        _mm_popcnt_u64(_mm_extract_epi64(value, 2)) +
+        _mm_popcnt_u64(_mm_extract_epi64(value, 3));
+#endif
 }
 
 template <unsigned int N>
