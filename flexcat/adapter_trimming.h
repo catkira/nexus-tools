@@ -261,6 +261,12 @@ const __m128i ZERO_128 = _mm_set1_epi8(0);
 //const __m128i N_128 = _mm_set1_epi8(0x04);
 const __m128i N_128 = _mm_set1_epi8('N');
 
+const __m256i ONE_256 = _mm256_set1_epi8(1);
+const __m256i ZERO_256 = _mm256_set1_epi8(0);
+//const __m128i N_128 = _mm_set1_epi8(0x04);
+const __m256i N_256 = _mm256_set1_epi8('N');
+
+
 inline size_t popcnt64(__m128i value) noexcept
 {
     //value = _mm_sad_epu8(ZERO_128, value);
@@ -273,6 +279,16 @@ inline size_t popcnt128(__m128i value) noexcept
 //    value = _mm_sad_epu8(ZERO_128, value);
 //    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
     return _mm_popcnt_u64(value.m128i_u64[0]) + _mm_popcnt_u64(value.m128i_u64[1]);
+}
+
+inline size_t popcnt256(__m256i value) noexcept
+{
+    //    value = _mm_sad_epu8(ZERO_128, value);
+    //    return _mm_extract_epi16(value, 0) + _mm_extract_epi16(value, 4);
+    return _mm_popcnt_u64(value.m256i_u64[0]) +
+        _mm_popcnt_u64(value.m256i_u64[1]) +
+        _mm_popcnt_u64(value.m256i_u64[2]) +
+        _mm_popcnt_u64(value.m256i_u64[3]);
 }
 
 template <unsigned int N>
@@ -354,6 +370,25 @@ struct compareAdapter<16>
     }
 };
 
+template <>
+struct compareAdapter<32>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m256i read = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&(*readIterator)));
+        const __m256i adapter = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(&(*adapterIterator)));
+
+        const __m256i NMask = _mm256_sub_epi8(_mm256_set1_epi32(0), _mm256_or_si256(_mm256_cmpeq_epi8(read, N_256), _mm256_cmpeq_epi8(adapter, N_256)));
+        const __m256i matchesMask = _mm256_sub_epi8(_mm256_set1_epi32(0), _mm256_or_si256(_mm256_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt256(_mm256_and_si256(NMask, ONE_256));
+        matches += popcnt256(_mm256_and_si256(matchesMask, ONE_256));
+        readIterator += 32;
+        adapterIterator += 32;
+    }
+};
+
 /*
 - shifts adapterTemplate against sequence
 - calculate score for each shift position
@@ -387,10 +422,20 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TAdapter& adapter,
         readIterator = readBeginIterator + overlapStart;
         adapterIterator = adapterBeginIterator + std::min(0, shiftPos)*(-1);
 
-        while (remaining >= 16)
+        while (remaining >= 32)
+        {
+            compareAdapter<32>::apply(readIterator, adapterIterator, matches, ambiguous);
+            remaining -= 32;
+        }
+        if (remaining >= 16)
         {
             compareAdapter<16>::apply(readIterator, adapterIterator, matches, ambiguous);
             remaining -= 16;
+        }
+        if (remaining >= 8)
+        {
+            compareAdapter<8>::apply(readIterator, adapterIterator, matches, ambiguous);
+            remaining -= 8;
         }
         switch (remaining)
         {
@@ -416,30 +461,6 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TAdapter& adapter,
             break;
         case 7:
             compareAdapter<7>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 8:
-            compareAdapter<8>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 9:
-            compareAdapter<9>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 10:
-            compareAdapter<10>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 11:
-            compareAdapter<11>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 12:
-            compareAdapter<12>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 13:
-            compareAdapter<13>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 14:
-            compareAdapter<14>::apply(readIterator, adapterIterator, matches, ambiguous);
-            break;
-        case 15:
-            compareAdapter<15>::apply(readIterator, adapterIterator, matches, ambiguous);
             break;
         }
         const float errorRate = static_cast<float>(overlap - matches - ambiguous) / static_cast<float>(overlap);
