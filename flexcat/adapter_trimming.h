@@ -255,8 +255,14 @@ void alignPair(TAlignResult &res, const TSeq& seq1, const TAdapter& seq2,
     res.errorRate = static_cast<float>(res.overlap - res.matches) / static_cast<float>(res.overlap);
 }
 
+const __m128i ONE_8 = _mm_set1_epi64x(0x01);
+const __m128i ONE_16 = _mm_set1_epi64x(0x0101);
+const __m128i ONE_24 = _mm_set1_epi64x(0x010101);
+const __m128i ONE_32 = _mm_set1_epi64x(0x01010101);
+const __m128i ONE_40 = _mm_set1_epi64x(0x0101010101);
+const __m128i ONE_48 = _mm_set1_epi64x(0x010101010101);
+const __m128i ONE_56 = _mm_set1_epi64x(0x01010101010101);
 const __m128i ONE_128 = _mm_set1_epi8(1);
-const __m128i ONE_8 = _mm_set1_epi64x(1);
 const __m128i ZERO_128 = _mm_set1_epi8(0);
 //const __m128i N_128 = _mm_set1_epi8(0x04);
 const __m128i N_128 = _mm_set1_epi8('N');
@@ -327,6 +333,132 @@ struct compareAdapter<0>
         (void)adapterIterator;
         (void)matches;
         (void)ambiguous;
+    }
+};
+
+template <>
+struct compareAdapter<2>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_16));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_16));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        readIterator += 8;
+        adapterIterator += 8;
+    }
+};
+
+template <>
+struct compareAdapter<3>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_24));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_24));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        readIterator += 8;
+        adapterIterator += 8;
+    }
+};
+
+template <>
+struct compareAdapter<4>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_32));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_32));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        readIterator += 8;
+        adapterIterator += 8;
+    }
+};
+
+template <>
+struct compareAdapter<5>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_40));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_40));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        readIterator += 8;
+        adapterIterator += 8;
+    }
+};
+
+template <>
+struct compareAdapter<6>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_48));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_48));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        readIterator += 8;
+        adapterIterator += 8;
+    }
+};
+
+template <>
+struct compareAdapter<7>
+{
+    template <typename TReadIterator, typename TAdapterIterator, typename TCounter>
+    inline static void apply(TReadIterator& readIterator, TAdapterIterator& adapterIterator, TCounter& matches, TCounter& ambiguous) noexcept
+    {
+        const __m128i read = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*readIterator)));
+        const __m128i adapter = _mm_loadu_si128(reinterpret_cast<const __m128i*>(&(*adapterIterator)));
+
+        const __m128i NMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, N_128), _mm_cmpeq_epi8(adapter, N_128)));
+        const __m128i matchesMask = _mm_sub_epi8(ZERO_128, _mm_or_si128(_mm_cmpeq_epi8(read, adapter), NMask));
+
+        ambiguous += popcnt64(_mm_and_si128(NMask, ONE_56));
+        matches += popcnt64(_mm_and_si128(matchesMask, ONE_56));
+        //ambiguous += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(NMask, ONE_128),0));
+        //matches += _mm_popcnt_u64(_mm_extract_epi64(_mm_and_si128(matchesMask, ONE_128), 0));
+        readIterator += 8;
+        adapterIterator += 8;
     }
 };
 
