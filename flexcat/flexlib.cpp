@@ -318,8 +318,9 @@ void printStatistics(const ProgramParams& programParams, const TStats& generalSt
         outStream << std::endl;
         outStream << "Time statistics:\n";
         outStream << "==================\n";
+        outStream << "read time      : " << std::setw(5) << generalStats.readTime << " seconds.\n";
         outStream << "Processing time: " << std::setw(5) << generalStats.processTime << " seconds.\n";
-        outStream << "       I/O time: " << std::setw(5) << generalStats.ioTime << " seconds.\n";
+        outStream << "write time     : " << std::setw(5) << generalStats.writeTime << " seconds.\n";
         outStream << std::endl;
     }
 }
@@ -330,9 +331,12 @@ unsigned int readReads(std::vector<TRead<TSeq>>& reads, const unsigned int recor
     reads.resize(records);
     unsigned int i = 0;
     TSeq seq;
+    std::string id;
+    std::string q;
     while (i < records && !atEnd(inputFileStreams.fileStream1))
     {
-        readRecord(reads[i].id, seq, inputFileStreams.fileStream1);
+        readRecord(id, seq, inputFileStreams.fileStream1);
+        reads[i].id = id;
         reads[i].seq = seq;
         ++i;
     }
@@ -367,22 +371,31 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
     unsigned int numReads = 0;
     auto readReader = [&numReads, &programParams, &inputFileStreams]() {
+        auto t1 = std::chrono::steady_clock::now();
         auto item = std::make_unique<std::vector<TRead<TSeq>>>();
         if (numReads > programParams.firstReads)    // maximum read number reached -> dont do further reads
         {
-            item.release();   // return empty unique_ptr to signal end
-            return std::move(item);
+            // return empty unique_ptr to signal eof
+            item.release();
+            return std::unique_ptr<std::tuple<decltype(item), const float>>();
         }
         readReads(*item, programParams.records, inputFileStreams);
         loadMultiplex(*item, programParams.records, inputFileStreams.fileStreamMultiplex);
         numReads += item->size();
         if (item->empty())    // no more reads available
-            item.release();   // return empty unique_ptr to signal eof
-        return std::move(item);
+        {
+            // return empty unique_ptr to signal eof
+            item.release();
+            return std::unique_ptr<std::tuple<decltype(item), const float>>();
+        }
+        const float readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+        return std::make_unique<std::tuple<decltype(item), decltype(readTime)>>(std::make_tuple(std::move(item), readTime));
     };
 
-    auto transformer = [&](auto reads){
+    auto transformer = [&](auto t){
+        auto reads = std::move(std::get<0>(*t));
         TStats stats = TStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
+        stats.readTime = std::move(std::get<1>(*t));
         TlsBlockAdapterTrimming<typename TStats::TAdapterTrimmingStats> tlsBlock(stats.adapterTrimmingStats, adapterTrimmingParams);
         stats.readCount = reads->size();
         preprocessingStage(processingParams, *reads, stats);
@@ -419,19 +432,19 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         const auto tMain = std::chrono::steady_clock::now();
         while (generalStats.readCount < programParams.firstReads)
         {
-            readSet.reset(new std::vector<TRead<TSeq>>(programParams.records));
             auto t1 = std::chrono::steady_clock::now();
+            readSet.reset(new std::vector<TRead<TSeq>>(programParams.records));
             const auto numReadsRead = readReads(*readSet, programParams.records, inputFileStreams);
-            generalStats.ioTime += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+            const auto readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
             if (numReadsRead == 0)
                 break;
 
-            auto res = transformer(std::move(readSet));
+            auto res = transformer(std::make_unique<std::tuple<decltype(readSet),decltype(readTime)>>(std::make_tuple(std::move(readSet),readTime)));
             generalStats += std::get<2>(*res);
 
             t1 = std::chrono::steady_clock::now();
             outputStreams.writeSeqs(std::move(*(std::get<0>(*res))), demultiplexingParams.barcodeIds);
-            generalStats.ioTime += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+            generalStats.writeTime += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
 
             // Print information
             const auto deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - tMain).count();
@@ -834,7 +847,7 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
             mainLoop(Read<seqan::Dna5QString>(), programParams, inputFileStreams, demultiplexingParams, processingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder, outputStreams, generalStats);
 
         double loop = SEQAN_PROTIMEDIFF(loopTime);
-        generalStats.processTime = loop - generalStats.ioTime;
+        generalStats.processTime = loop - generalStats.readTime - generalStats.writeTime;
 
         printStatistics(programParams, generalStats, demultiplexingParams, adapterTrimmingParams, outputStreams, !isSet(parser, "ni"), std::cout);
         if (isSet(parser, "st"))
@@ -864,7 +877,7 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
             mainLoop(ReadPairedEnd<seqan::Dna5QString>(), programParams, inputFileStreams, demultiplexingParams, processingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder, outputStreams, generalStats);
 
         double loop = SEQAN_PROTIMEDIFF(loopTime);
-        generalStats.processTime = loop - generalStats.ioTime;
+        generalStats.processTime = loop - generalStats.readTime - generalStats.writeTime;
 
         printStatistics(programParams, generalStats, demultiplexingParams, adapterTrimmingParams, outputStreams, !isSet(parser, "ni"), std::cout);
         if (isSet(parser, "st"))

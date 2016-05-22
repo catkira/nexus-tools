@@ -145,12 +145,12 @@ public:
     template <template<typename> class TRead, typename TSeq, typename TNames>
     void writeSeqs(std::vector<TRead<TSeq>>&& reads, const TNames& names)
     {
-        updateStreams(names, std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value);
-        for(auto& read : reads)
-        {
-            const unsigned streamIndex = read.demuxResult;
-            writeRecord(fileStreams[streamIndex], std::move(read));
-        }
+        //updateStreams(names, std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value);
+        //for(auto& read : reads)
+        //{
+        //    const unsigned streamIndex = read.demuxResult;
+        //    writeRecord(fileStreams[streamIndex], std::move(read));
+        //}
     }
 
     ~OutputStreams(){}
@@ -181,8 +181,8 @@ public:
         _stats += std::get<2>(*item);
 
         // terminal output
-        const auto ioTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
-        _stats.ioTime += ioTime;
+        const auto writeTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+        _stats.writeTime += writeTime;
         const auto deltaLastScreenUpdate = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - _lastScreenUpdate).count();
         if (deltaLastScreenUpdate > 1)
         {
