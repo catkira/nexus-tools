@@ -30,12 +30,27 @@ class OutputStreams
         seqan::writeRecord(*(stream.first), std::move(read.id), std::move(read.seq));
     }
 
+    template < typename TStream, template<typename> class TRead, typename TSeq,
+        typename = std::enable_if_t < std::is_same<TRead<TSeq>, Read<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplex<TSeq>>::value  > >
+        inline void writeRecord(TStream& stream, TRead<TSeq>& read, bool = false)
+    {
+        seqan::writeRecord(*(stream.first), read.id, read.seq);
+    }
+
     template <typename TStream, template<typename> class TRead, typename TSeq,
         typename = std::enable_if_t < std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value  > >
         inline void writeRecord(TStream& stream, TRead<TSeq>&& read)
     {
         seqan::writeRecord(*(stream.first), std::move(read.id), std::move(read.seq));
         seqan::writeRecord(*(stream.second), std::move(read.idRev), std::move(read.seqRev));
+    }
+
+    template <typename TStream, template<typename> class TRead, typename TSeq,
+        typename = std::enable_if_t < std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value  > >
+        inline void writeRecord(TStream& stream, TRead<TSeq>& read)
+    {
+        seqan::writeRecord(*(stream.first), read.id, read.seq);
+        seqan::writeRecord(*(stream.second), read.idRev, read.seqRev);
     }
 
     //Adds a new output streams to the collection of streams.
@@ -143,14 +158,25 @@ public:
     }
 
     template <template<typename> class TRead, typename TSeq, typename TNames>
+    void writeSeqs(std::vector<TRead<TSeq>>& reads, const TNames& names)
+    {
+        updateStreams(names, std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value);
+        for(auto& read : reads)
+        {
+            const unsigned streamIndex = read.demuxResult;
+            writeRecord(fileStreams[streamIndex], read);
+        }
+    }
+
+    template <template<typename> class TRead, typename TSeq, typename TNames>
     void writeSeqs(std::vector<TRead<TSeq>>&& reads, const TNames& names)
     {
-        //updateStreams(names, std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value);
-        //for(auto& read : reads)
-        //{
-        //    const unsigned streamIndex = read.demuxResult;
-        //    writeRecord(fileStreams[streamIndex], std::move(read));
-        //}
+        updateStreams(names, std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value);
+        for (auto& read : reads)
+        {
+            const unsigned streamIndex = read.demuxResult;
+            writeRecord(fileStreams[streamIndex], std::move(read));
+        }
     }
 
     ~OutputStreams(){}
@@ -174,11 +200,13 @@ public:
         _outputStreams(outputStreams), _programParams(programParams), _startTime(std::chrono::steady_clock::now()) {};
 
     template <typename TItem>
-    void operator()(TItem item)
+    TItem operator()(TItem item)
     {
         const auto t1 = std::chrono::steady_clock::now();
-        _outputStreams.writeSeqs(std::move(*std::get<0>(*item)), std::get<1>(*item));
+        _outputStreams.writeSeqs(*std::get<0>(*item), std::get<1>(*item));
         _stats += std::get<2>(*item);
+
+        //TODO: reuse item
 
         // terminal output
         const auto writeTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
@@ -193,6 +221,7 @@ public:
                 std::cout << "\rReads processed: " << _stats.readCount;
             _lastScreenUpdate = std::chrono::steady_clock::now();
         }
+        return std::move(item);
     }
     TGeneralStats get_result()
     {

@@ -380,11 +380,115 @@ namespace ptc
         ContainerSelector(const unsigned int size) : LockfreeQueue<TItem, TWaitPolicy, BlockingInsert::yes, BlockingRetrieve::no>(size) {};
     };
 
+
+    template<typename F, typename Ret>
+    void helper(Ret(F::*)());
+
+    template<typename F, typename Ret>
+    void helper(Ret(F::*)() const);
+
+    template<typename F, typename Ret, typename A, typename... Rest>
+    A helper(Ret(F::*)(A, Rest...));
+
+    template<typename F, typename Ret, typename A, typename... Rest>
+    A helper(Ret(F::*)(A, Rest...) const);
+
+    template<typename F>
+    struct first_argument {
+        typedef decltype(helper(&F::operator())) type;
+    };
+
+    template<typename TSource, typename TOrderPolicy, typename TWaitPolicy, bool>
+    struct Produce ;
+
     /*
     reads read sets from hd and puts them into slots, waits if no free slots are available
     */
     template<typename TSource, typename TOrderPolicy, typename TWaitPolicy>
-    struct Produce : private OrderManager<TOrderPolicy>, public WaitManager<TWaitPolicy>
+    struct Produce < TSource, TOrderPolicy, TWaitPolicy, true> : private OrderManager<TOrderPolicy>, public WaitManager<TWaitPolicy>
+    {
+    public:
+        using core_item_type = typename std::result_of_t<TSource()>;
+        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<core_item_type>;
+    private:
+        ContainerSelector<item_type, InputPolicy::single, OutputPolicy::multi, TWaitPolicy, TOrderPolicy> _slots;
+        ContainerSelector<item_type, InputPolicy::single, OutputPolicy::single, TWaitPolicy, TOrderPolicy> _usedItems;
+        TSource& _source;
+        const unsigned int _numSlots;
+        std::thread _thread;
+        std::atomic_bool _eof;
+    // function declarations and definitions
+    public:
+        Produce(TSource& source, const unsigned int numSlots)
+            : OrderManager<TOrderPolicy>(numSlots), _slots(numSlots), _source(source), _numSlots(numSlots), _eof(false)
+        {}
+        ~Produce()
+        {
+            if (_thread.joinable())
+                _thread.join();
+        }
+        void start()
+        {
+            /*
+            - read data
+            - set eof=true if data is null item and return from thread
+            - if eof=false, insert data into slot
+            */
+            _thread = std::thread([this]()
+            {
+                while (true)
+                {
+                    item_type usedItem = _usedItems;
+                    _usedItems.try_retrieve(usedItem);
+                    source(usedItem);
+                    if (!item)
+                    {
+                        _eof.store(true, std::memory_order_release);
+                        this->signal(_numSlots);
+                        return;
+                    }
+                    auto insert_item = this->appendOrderId(std::move(item));
+                    _slots.insert(std::move(insert_item));
+                    this->signal();
+                }
+            });
+        }
+        inline bool eof() const noexcept
+        {
+            return _eof.load(std::memory_order_acquire);
+        }
+        /*
+        do the following steps sequentially
+        - check if any slot contains data, if yes return true
+        - check if eof is reached and all slots are empty, return false
+        - go to sleep until data is available
+        */
+        bool getItem(std::unique_ptr<item_type>& returnItem) noexcept
+        {
+            while (true)
+            {
+                const bool eof = _eof.load(std::memory_order_acquire);
+                if (!_slots.try_retrieve(returnItem))
+                    if (!eof)
+                        wait();
+                    else
+                        return false;
+                else
+                    return true;
+            }
+            return false;
+        }
+        void putUsedItem(std::unique_ptr<item_type>&& usedItem) noexcept
+        {
+            _usedItems.insert(std::move(usedItem));
+        }
+    };
+
+    /*
+    reads read sets from hd and puts them into slots, waits if no free slots are available
+    */
+    template<typename TSource, typename TOrderPolicy, typename TWaitPolicy>
+    struct Produce<TSource, TOrderPolicy, TWaitPolicy, false> : private OrderManager<TOrderPolicy>, public WaitManager<TWaitPolicy>
     {
     public:
         using core_item_type = typename std::result_of_t<TSource()>;
@@ -395,7 +499,7 @@ namespace ptc
         const unsigned int _numSlots;
         std::thread _thread;
         std::atomic_bool _eof;
-    // function declarations and definitions
+        // function declarations and definitions
     public:
         Produce(TSource& source, const unsigned int numSlots)
             : OrderManager<TOrderPolicy>(numSlots), _slots(numSlots), _source(source), _numSlots(numSlots), _eof(false)
@@ -456,22 +560,49 @@ namespace ptc
         };
     };
 
-    template<typename TSink, typename TCoreItemType, typename TOrderPolicy, typename TWaitPolicy>
-    struct Consume : private OrderManager<TOrderPolicy>, private WaitManager<TWaitPolicy>
+    template <typename TSink, typename TCoreItemType, bool = false>
+    struct SinkReuseInterface;
+
+    template <typename TSink, typename TCoreItemType>
+    struct SinkReuseInterface<TSink, TCoreItemType, true>
+    {
+        TSink& _sink;
+        SinkReuseInterface(TSink&& sink) : _sink(sink), _usedItems(10) {};
+
+        ContainerSelector<TCoreItemType, InputPolicy::single, OutputPolicy::single, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
+        void sink(TCoreItemType)
+        {}
+    };
+
+    template <typename TSink, typename TCoreItemType>
+    struct SinkReuseInterface<TSink, TCoreItemType, false>
+    {
+        TSink& _sink;
+        SinkReuseInterface(TSink&& sink) : _sink(sink) {};
+        void sink(TCoreItemType arg)
+        {
+            _sink(std::move(arg));
+        }
+    };
+
+
+    template<typename TSink, typename TCoreItemType, typename TOrderPolicy, typename TWaitPolicy, bool reuseItems>
+    struct Consume : private OrderManager<TOrderPolicy>, private WaitManager<TWaitPolicy>, private SinkReuseInterface<TSink, TCoreItemType, reuseItems>
     {
     public:
-        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<TCoreItemType>;
+        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<TCoreItemType>; // for unordered its just plain TCoreItemType
         using ownSink = std::is_same<TSink, std::remove_reference_t<TSink>>;    // not used
     private:
         ContainerSelector<item_type, InputPolicy::multi, OutputPolicy::single, TWaitPolicy, TOrderPolicy> _slots;
-        TSink& _sink;
+       // ContainerSelector<item_type, InputPolicy::single, OutputPolicy::single, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
+
         const unsigned int _numSlots;
         std::thread _thread;
         std::atomic_bool _run;
     // function declarations and definitions
     public:
         Consume(TSink&& sink, const unsigned int numSlots)
-            : OrderManager<TOrderPolicy>(numSlots), _slots(numSlots), _sink(sink), _numSlots(numSlots), _run(false)
+            : OrderManager<TOrderPolicy>(numSlots), SinkReuseInterface(sink), _slots(numSlots), _numSlots(numSlots), _run(false)
         {}
         ~Consume()
         {
@@ -479,14 +610,12 @@ namespace ptc
             if (_thread.joinable())
                 _thread.join();
         }
-
         template<typename Sink = TSink, typename = decltype(&std::remove_reference_t<Sink>::get_result)(Sink)>
         auto
-        get_result()
+            get_result()
         {
             return _sink.get_result();
         }
-
         void start()
         {
             _run = true;
@@ -502,17 +631,17 @@ namespace ptc
                         {
                             if (this->is_next_item((*it).get()))
                             {
-                                _sink(std::move(this->extractItem(std::move(*it))));
+                                sink(std::move(this->extractItem(std::move(*it))));
                                 it = itemBuffer.erase(it);
                             }
                         }
                     }
                     if (_slots.try_retrieve(currentItemIdPair))
                     {
-                        if (this->is_next_item(currentItemIdPair.get()))
+                        if (this->is_next_item(currentItemIdPair.get())) // returns always true for unordered
                         {
                             auto temp = this->extractItem(std::move(currentItemIdPair));
-                            _sink(std::move(temp));
+                            sink(std::move(temp));
                         }
                         else
                         {
@@ -544,14 +673,16 @@ namespace ptc
     struct PTC_unit
     {
     private:
-        using Produce_t = Produce<TSource, TOrderPolicy, TWaitPolicy>;
-        using produce_core_item_type = typename Produce<TSource, TOrderPolicy, TWaitPolicy>::core_item_type;
+        static const bool reuseItems = !std::is_same<typename first_argument<std::remove_reference_t<TSource>>::type, void>::value;
+
+        using Produce_t = Produce<TSource, TOrderPolicy, TWaitPolicy, reuseItems>;
+        using produce_core_item_type = typename Produce_t::core_item_type;
         Produce_t _producer;
 
         const TTransformer _transformer;
         using transform_core_item = typename std::result_of_t<TTransformer(produce_core_item_type)>;
 
-        using Consume_t = Consume<TSink, transform_core_item, TOrderPolicy, TWaitPolicy>;
+        using Consume_t = Consume<TSink, transform_core_item, TOrderPolicy, TWaitPolicy, reuseItems>;
         Consume_t _consumer;
 
         std::vector<std::thread> _threads;
@@ -570,7 +701,12 @@ namespace ptc
                     std::unique_ptr<typename Produce_t::item_type> item;
                     while (_producer.getItem(item))
                     {
-                        _consumer.pushItem(std::move(OrderManager<TOrderPolicy>::callTransformer(_transformer, std::move(item))));
+                        if (reuseItems) // static if
+                        {
+                            _consumer.pushItem(std::move(OrderManager<TOrderPolicy>::callTransformer(_transformer, std::move(item))));
+                        }
+                        else
+                            _consumer.pushItem(std::move(OrderManager<TOrderPolicy>::callTransformer(_transformer, std::move(item))));
                     }
                 });
             }

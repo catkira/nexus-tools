@@ -315,12 +315,15 @@ void printStatistics(const ProgramParams& programParams, const TStats& generalSt
     // Print processing and IO time. IO is (approx.) the whole loop without the processing part.
     if (timing)
     {
+        const float totalTime = generalStats.writeTime + generalStats.processTime + generalStats.readTime;
         outStream << std::endl;
         outStream << "Time statistics:\n";
         outStream << "==================\n";
-        outStream << "read time      : " << std::setw(5) << generalStats.readTime << " seconds.\n";
-        outStream << "Processing time: " << std::setw(5) << generalStats.processTime << " seconds.\n";
-        outStream << "write time     : " << std::setw(5) << generalStats.writeTime << " seconds.\n";
+        outStream << "read time        : " << std::setw(5) << generalStats.readTime << " seconds  " << generalStats.readTime/totalTime*100<< "%.\n";
+        outStream << "Processing time* : " << std::setw(5) << generalStats.processTime << " seconds  " << generalStats.processTime / totalTime * 100 << "%.\n";
+        outStream << "write time       : " << std::setw(5) << generalStats.writeTime << " seconds  " << generalStats.writeTime / totalTime * 100 << "%.\n";
+        outStream << "------------------\n";
+        outStream << "total time       : " << std::setw(5) << generalStats.writeTime + generalStats.processTime + generalStats.readTime << " seconds.\n";
         outStream << std::endl;
     }
 }
@@ -371,7 +374,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
     unsigned int numReads = 0;
     auto readReader = [&numReads, &programParams, &inputFileStreams]() {
-        auto t1 = std::chrono::steady_clock::now();
+        const auto t1 = std::chrono::steady_clock::now();
         auto item = std::make_unique<std::vector<TRead<TSeq>>>();
         if (numReads > programParams.firstReads)    // maximum read number reached -> dont do further reads
         {
@@ -439,7 +442,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
             if (numReadsRead == 0)
                 break;
 
-            auto res = transformer(std::make_unique<std::tuple<decltype(readSet),decltype(readTime)>>(std::make_tuple(std::move(readSet),readTime)));
+            auto res = transformer(std::make_unique<std::tuple<decltype(readSet),float>>(std::make_tuple(std::move(readSet), readTime)));
             generalStats += std::get<2>(*res);
 
             t1 = std::chrono::steady_clock::now();
@@ -465,7 +468,7 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 
 int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
 {
-    SEQAN_PROTIMESTART(loopTime);
+    const auto loopTime = std::chrono::steady_clock::now();
     seqan::ArgumentParser parser = initParser(flexiProgram);
 
     // Additional checks
@@ -846,7 +849,7 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
         else
             mainLoop(Read<seqan::Dna5QString>(), programParams, inputFileStreams, demultiplexingParams, processingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder, outputStreams, generalStats);
 
-        double loop = SEQAN_PROTIMEDIFF(loopTime);
+        const auto loop = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - loopTime).count();
         generalStats.processTime = loop - generalStats.readTime - generalStats.writeTime;
 
         printStatistics(programParams, generalStats, demultiplexingParams, adapterTrimmingParams, outputStreams, !isSet(parser, "ni"), std::cout);
@@ -876,7 +879,7 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
         else
             mainLoop(ReadPairedEnd<seqan::Dna5QString>(), programParams, inputFileStreams, demultiplexingParams, processingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder, outputStreams, generalStats);
 
-        double loop = SEQAN_PROTIMEDIFF(loopTime);
+        const auto loop = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - loopTime).count();
         generalStats.processTime = loop - generalStats.readTime - generalStats.writeTime;
 
         printStatistics(programParams, generalStats, demultiplexingParams, adapterTrimmingParams, outputStreams, !isSet(parser, "ni"), std::cout);
