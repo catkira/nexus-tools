@@ -200,13 +200,12 @@ public:
         _outputStreams(outputStreams), _programParams(programParams), _startTime(std::chrono::steady_clock::now()) {};
 
     template <typename TItem>
-    TItem operator()(TItem item)
+    std::unique_ptr < std::tuple < std::tuple_element_t < 0, typename TItem::element_type>, std::tuple_element_t<2, typename TItem::element_type >> >
+    operator()(TItem item)
     {
         const auto t1 = std::chrono::steady_clock::now();
         _outputStreams.writeSeqs(*std::get<0>(*item), std::get<1>(*item));
         _stats += std::get<2>(*item);
-
-        //TODO: reuse item
 
         // terminal output
         const auto writeTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
@@ -221,7 +220,7 @@ public:
                 std::cout << "\rReads processed: " << _stats.readCount;
             _lastScreenUpdate = std::chrono::steady_clock::now();
         }
-        return std::move(item);
+        return std::make_unique < std::tuple < std::tuple_element_t < 0, typename TItem::element_type> , std::tuple_element_t<2, typename TItem::element_type >> > (std::make_tuple(std::move(std::get<0>(*item)), std::get<2>(*item)));
     }
     TGeneralStats get_result()
     {

@@ -287,7 +287,7 @@ void printStatistics(const ProgramParams& programParams, const TStats& generalSt
             else
                 outStream << " 5'";
             outStream << "-adapter, ";
-            outStream << generalStats.adapterTrimmingStats.numRemoved[adapterItem.id] << "x, " << adapterItem.getSeq() << std::endl;
+            outStream << (unsigned int)generalStats.adapterTrimmingStats.numRemoved[adapterItem.id] << "x, " << adapterItem.getSeq() << std::endl;
             ++i;
         }
         outStream << std::endl;
@@ -296,16 +296,16 @@ void printStatistics(const ProgramParams& programParams, const TStats& generalSt
         outStream << std::endl;
         if (totalRemoved != 0)
         {
-            int mean = generalStats.adapterTrimmingStats.overlapSum / totalRemoved;
+            unsigned int mean = generalStats.adapterTrimmingStats.overlapSum / totalRemoved;
             outStream << "Adapter sizes:\n";
-            outStream << "Min: " << generalStats.adapterTrimmingStats.minOverlap << ", Mean: " << mean
-                << ", Max: " << generalStats.adapterTrimmingStats.maxOverlap << "\n\n";
+            outStream << "Min: " << (unsigned int)generalStats.adapterTrimmingStats.minOverlap << ", Mean: " << mean
+                << ", Max: " << (unsigned int)generalStats.adapterTrimmingStats.maxOverlap << "\n\n";
         }
         outStream << "Number of removed adapters\nmismatches\t0\t1\t2\t3\t4\t5\t6\t7\t8\nlength" << std::endl;
         i = 0;
         for (const auto adaptersSizeX : generalStats.adapterTrimmingStats.removedLength)
         {
-            outStream << ++i<<"\t";
+            outStream << (unsigned int)++i<<"\t";
             for (const auto adaptersSizeXMismatchesN : adaptersSizeX)
                 outStream << "\t" << (unsigned int)adaptersSizeXMismatchesN;
             outStream << std::endl;
@@ -335,7 +335,6 @@ unsigned int readReads(std::vector<TRead<TSeq>>& reads, const unsigned int recor
     unsigned int i = 0;
     TSeq seq;
     std::string id;
-    std::string q;
     while (i < records && !atEnd(inputFileStreams.fileStream1))
     {
         readRecord(id, seq, inputFileStreams.fileStream1);
@@ -373,14 +372,15 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     TReadWriter readWriter(outputStreams, programParams);
 
     unsigned int numReads = 0;
-    auto readReader = [&numReads, &programParams, &inputFileStreams]() {
+    auto readReader = [&numReads, &programParams, &inputFileStreams, &demultiplexingParams, &adapterTrimmingParams]() {
         const auto t1 = std::chrono::steady_clock::now();
+        TStats stats = TStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
         auto item = std::make_unique<std::vector<TRead<TSeq>>>();
         if (numReads > programParams.firstReads)    // maximum read number reached -> dont do further reads
         {
             // return empty unique_ptr to signal eof
             item.release();
-            return std::unique_ptr<std::tuple<decltype(item), const float>>();
+            return std::unique_ptr<std::tuple<decltype(item), TStats>>();
         }
         readReads(*item, programParams.records, inputFileStreams);
         loadMultiplex(*item, programParams.records, inputFileStreams.fileStreamMultiplex);
@@ -389,16 +389,48 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         {
             // return empty unique_ptr to signal eof
             item.release();
-            return std::unique_ptr<std::tuple<decltype(item), const float>>();
+            return std::unique_ptr<std::tuple<decltype(item), TStats>>();
         }
-        const float readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
-        return std::make_unique<std::tuple<decltype(item), decltype(readTime)>>(std::make_tuple(std::move(item), readTime));
+        stats.readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+        return std::make_unique<std::tuple<decltype(item), TStats>>(std::make_tuple(std::move(item), stats));
     };
+    auto readReaderReuse = [&numReads, &programParams, &inputFileStreams, &demultiplexingParams, &adapterTrimmingParams](std::unique_ptr<std::tuple<std::unique_ptr<std::vector<TRead<TSeq>>>,TStats>>&& usedItem) {
+        const auto t1 = std::chrono::steady_clock::now();
+
+        auto item = std::move(usedItem);
+        if (item == nullptr)
+        {
+            item = std::make_unique<std::tuple<std::unique_ptr<std::vector<TRead<TSeq>>>, TStats>>();
+            std::get<0>(*item) = std::make_unique<std::vector<TRead<TSeq>>>();
+            std::get<1>(*item) = TStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
+        }
+        //if(std::get<0>(*item) == nullptr) // this check is not necessary
+        //    std::get<0>(*item) = std::make_unique<std::vector<TRead<TSeq>>>();
+        TStats& stats = std::get<1>(*item);
+        auto& reads = *std::get<0>(*item);
+        if (numReads > programParams.firstReads)    // maximum read number reached -> dont do further reads
+        {
+            // return empty unique_ptr to signal eof
+            item.release();
+            return std::unique_ptr<std::tuple<std::unique_ptr<std::vector<TRead<TSeq>>>, TStats>>();
+        }
+        readReads(reads, programParams.records, inputFileStreams);
+        loadMultiplex(reads, programParams.records, inputFileStreams.fileStreamMultiplex);
+        numReads += reads.size();
+        if (reads.empty())    // no more reads available
+        {
+            // return empty unique_ptr to signal eof
+            return std::unique_ptr<std::tuple<std::unique_ptr<std::vector<TRead<TSeq>>>, TStats>>();
+        }
+        stats.readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+        return item;
+    };
+
+
 
     auto transformer = [&](auto t){
         auto reads = std::move(std::get<0>(*t));
-        TStats stats = TStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
-        stats.readTime = std::move(std::get<1>(*t));
+        TStats& stats = std::get<1>(*t);
         TlsBlockAdapterTrimming<typename TStats::TAdapterTrimmingStats> tlsBlock(stats.adapterTrimmingStats, adapterTrimmingParams);
         stats.readCount = reads->size();
         preprocessingStage(processingParams, *reads, stats);
@@ -407,26 +439,47 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         adapterTrimmingStage(*reads, tlsBlock);
         qualityTrimmingStage(qualityTrimmingParams, *reads, stats);
         postprocessingStage(processingParams, *reads, stats);
-        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), decltype(stats) >>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, stats));
+        return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), TStats>>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, stats));
     };
 
     TStats generalStats(length(demultiplexingParams.barcodeIds) + 1, adapterTrimmingParams.adapters.size());
 
+    bool reuse = true;
     if (programParams.num_threads > 1)
     {
-        if (programParams.ordered)
+        if (reuse)
         {
-            auto ptc_unit = ptc::ordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
-            ptc_unit->start();
-            auto f = ptc_unit->get_future();
-            stats = f.get();
+            if (programParams.ordered)
+            {
+                auto ptc_unit = ptc::ordered_ptc(readReaderReuse, transformer, readWriter, programParams.num_threads);
+                ptc_unit->start();
+                auto f = ptc_unit->get_future();
+                stats = f.get();
+            }
+            else
+            {
+                auto ptc_unit = ptc::unordered_ptc(readReaderReuse, transformer, readWriter, programParams.num_threads);
+                ptc_unit->start();
+                auto f = ptc_unit->get_future();
+                stats = f.get();
+            }
         }
         else
         {
-            auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
-            ptc_unit->start();
-            auto f = ptc_unit->get_future();
-            stats = f.get();
+            if (programParams.ordered)
+            {
+                auto ptc_unit = ptc::ordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
+                ptc_unit->start();
+                auto f = ptc_unit->get_future();
+                stats = f.get();
+            }
+            else
+            {
+                auto ptc_unit = ptc::unordered_ptc(readReader, transformer, readWriter, programParams.num_threads);
+                ptc_unit->start();
+                auto f = ptc_unit->get_future();
+                stats = f.get();
+            }
         }
     }
     else
@@ -438,11 +491,10 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
             auto t1 = std::chrono::steady_clock::now();
             readSet.reset(new std::vector<TRead<TSeq>>(programParams.records));
             const auto numReadsRead = readReads(*readSet, programParams.records, inputFileStreams);
-            const auto readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
             if (numReadsRead == 0)
                 break;
-
-            auto res = transformer(std::make_unique<std::tuple<decltype(readSet),float>>(std::make_tuple(std::move(readSet), readTime)));
+            generalStats.readTime += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+            auto res = transformer(std::make_unique<std::tuple<decltype(readSet),decltype(generalStats)>>(std::make_tuple(std::move(readSet), generalStats)));
             generalStats += std::get<2>(*res);
 
             t1 = std::chrono::steady_clock::now();
