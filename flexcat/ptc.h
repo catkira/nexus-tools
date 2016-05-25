@@ -440,7 +440,7 @@ namespace ptc
     public:
         using core_item_type = typename std::result_of_t<TSource()>;
         template <typename TDummy>
-        void pushUsedItem(const TDummy usedItem) noexcept {};
+        void pushUsedItem(const TDummy usedItem) noexcept {}
     };
 
 
@@ -451,7 +451,7 @@ namespace ptc
     struct Produce : private OrderManager<TOrderPolicy>, public WaitManager<TWaitPolicy>, public ProduceReuseInterface<TSource, reuseItems>
     {
     public:
-        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<ProduceReuseInterface<TSource, reuseItems>::core_item_type>;
+        using item_type = typename OrderManager<TOrderPolicy>::template ItemIdPair_t<typename ProduceReuseInterface<TSource, reuseItems>::core_item_type>;
     private:
         ContainerSelector<item_type, InputPolicy::single, OutputPolicy::multi, TWaitPolicy, TOrderPolicy> _slots;
         const unsigned int _numSlots;
@@ -460,7 +460,7 @@ namespace ptc
     // function declarations and definitions
     public:
         Produce(TSource& source, const unsigned int numSlots)
-            : OrderManager<TOrderPolicy>(numSlots), ProduceReuseInterface(source), _slots(numSlots), _numSlots(numSlots), _eof(false)
+            : OrderManager<TOrderPolicy>(numSlots), ProduceReuseInterface<TSource, reuseItems>(source), _slots(numSlots), _numSlots(numSlots), _eof(false)
         {}
         ~Produce()
         {
@@ -478,7 +478,7 @@ namespace ptc
             {
                 while (true)
                 {
-                    auto item = getSourceItem();
+                    auto item = this->getSourceItem();
                     if (!item)
                     {
                         _eof.store(true, std::memory_order_release);
@@ -515,10 +515,6 @@ namespace ptc
                     return true;
             }
             return false;
-        }
-        void putUsedItem(std::unique_ptr<item_type>&& usedItem) noexcept
-        {
-            _usedItems.insert(std::move(usedItem));
         }
     };
 
@@ -588,7 +584,7 @@ namespace ptc
     // function declarations and definitions
     public:
         Consume(TSink&& sink, const unsigned int numSlots)
-            : OrderManager<TOrderPolicy>(numSlots), SinkReuseInterface(sink), _slots(numSlots), _numSlots(numSlots), _run(false)
+            : OrderManager<TOrderPolicy>(numSlots), SinkReuseInterface<TSink, TCoreItemType, reuseItems>(sink), _slots(numSlots), _numSlots(numSlots), _run(false)
         {}
         ~Consume()
         {
@@ -611,7 +607,7 @@ namespace ptc
                         {
                             if (this->is_next_item((*it).get()))
                             {
-                                sink(std::move(this->extractItem(std::move(*it))));
+                                this->sink(std::move(this->extractItem(std::move(*it))));
                                 it = itemBuffer.erase(it);
                             }
                         }
@@ -621,7 +617,7 @@ namespace ptc
                         if (this->is_next_item(currentItemIdPair.get())) // returns always true for unordered
                         {
                             auto temp = this->extractItem(std::move(currentItemIdPair));
-                            sink(std::move(temp));
+                            this->sink(std::move(temp));
                         }
                         else
                         {
