@@ -421,9 +421,9 @@ namespace ptc
         }
     public:
         using core_item_type = typename std::result_of_t<TSource(reuse_item_type)>;
-        void pushUsedItem(reuse_item_type usedItem) noexcept
+        void pushUsedItem(reuse_item_type&& usedItem) noexcept
         {
-            _usedItems.try_insert(std::move(usedItem));
+           _usedItems.try_insert(usedItem);
         }
     };
 
@@ -532,9 +532,10 @@ namespace ptc
         using used_item_type = std::result_of_t<TSink(TCoreItemType)>;
 
         ContainerSelector<typename used_item_type::element_type, InputPolicy::single, OutputPolicy::single, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
-        void sink(TCoreItemType arg)
+        void sink(TCoreItemType&& arg)
         {
-            _usedItems.try_insert(std::move(_sink(std::move(arg))));
+            auto temp = _sink(std::move(arg));
+            _usedItems.try_insert(temp);
         }
     public:
         void getUsedItem(used_item_type& usedItem) noexcept
