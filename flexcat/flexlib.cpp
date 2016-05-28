@@ -488,29 +488,30 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
     {
         std::unique_ptr<std::vector<TRead<TSeq>>> readSet;
         const auto tMain = std::chrono::steady_clock::now();
-        while (generalStats.readCount < programParams.firstReads)
+        while (stats.readCount < programParams.firstReads)
         {
             auto t1 = std::chrono::steady_clock::now();
             readSet.reset(new std::vector<TRead<TSeq>>(programParams.records));
             const auto numReadsRead = readReads(*readSet, programParams.records, inputFileStreams);
             if (numReadsRead == 0)
                 break;
-            generalStats.readTime += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+            generalStats.readTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
             auto res = transformer(std::make_unique<std::tuple<decltype(readSet),decltype(generalStats)>>(std::make_tuple(std::move(readSet), generalStats)));
-            generalStats += std::get<2>(*res);
+            generalStats = std::get<2>(*res);
 
             t1 = std::chrono::steady_clock::now();
             outputStreams.writeSeqs(std::move(*(std::get<0>(*res))), demultiplexingParams.barcodeIds);
-            generalStats.writeTime += std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
+            generalStats.writeTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
 
             // Print information
             const auto deltaTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - tMain).count();
             if (programParams.showSpeed)
-                std::cout << "\rreads processed: " << generalStats.readCount << "   (" << static_cast<int>(generalStats.readCount / deltaTime) << " Reads/s)";
+                std::cout << "\rreads processed: " << stats.readCount << "   (" << static_cast<int>(stats.readCount / deltaTime) << " Reads/s)";
             else
-                std::cout << "\rreads processed: " << generalStats.readCount;
+                std::cout << "\rreads processed: " << stats.readCount;
+            stats += generalStats;
         }
-        stats = generalStats;
+        //stats = generalStats;
     }
     return 0;
 }
@@ -911,7 +912,6 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
         else
             mainLoop(ReadPairedEnd<seqan::Dna5QString>(), programParams, inputFileStreams, demultiplexingParams, processingParams, adapterTrimmingParams, qualityTrimmingParams, esaFinder, outputStreams, generalStats);
     }
-    const auto loop = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - loopTime).count();
     generalStats.processTime /= programParams.num_threads;
 
     printStatistics(programParams, generalStats, demultiplexingParams, adapterTrimmingParams, outputStreams, !isSet(parser, "ni"), std::cout);
