@@ -32,29 +32,36 @@ struct Statistics
 template <typename TStream>
 void printStatistics(TStream &stream, const Statistics &stats, const bool clusterFiltering, const bool tabbed=false)
 {
+    assert(stats.removedReads == stats.totalSamePositionReads);
     if (tabbed)
     {
-        stream << "Total reads" << "\t"<< stats.totalReads << std::endl;
-        stream << "Filtered reads (-fc Option)" << "\t" << stats.filteredReads << std::endl;
-        stream << "Mapped reads" << "\t" << stats.totalMappedReads << std::endl;
-        stream << "Non mappable reads" << "\t" << stats.couldNotMap << std::endl;
-        stream << "Non uniquely mappable reads" << "\t" << stats.couldNotMapUniquely << std::endl;
-        stream << "After barcode filtering" << "\t" << stats.totalMappedReads - stats.removedReads << "\t" << " (-" << stats.removedReads << ")" << std::endl;
-        stream << "PCR duplication rate" << "\t" << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
-        stream << "Total duplet reads" << "\t" << stats.totalSamePositionReads << std::endl;
+        stream << "Total reads\t" << stats.totalReads << std::endl;
+        stream << "Filtered reads (-fc Option)\t" << stats.filteredReads << std::endl;
+        stream << "Non mappable reads\t" << stats.couldNotMap << std::endl;
+        stream << "Non uniquely mappable reads\t" << stats.couldNotMapUniquely << std::endl;
+        stream << std::endl;
+        stream << "Mapped reads\t" << stats.totalMappedReads << std::endl;
+        stream << "Removed duplet reads\t" << stats.removedReads << std::endl;
+        stream << std::endl;
+        stream << "After barcode filtering\t" << stats.totalMappedReads - stats.removedReads << std::endl;
+        stream << std::endl;
+        stream << "PCR duplication rate\t" << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
         if (clusterFiltering)
-            stream << "After cluster filtering" << "\t" << stats.readsAfterFiltering << "\t" << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
+            stream << "After cluster filtering\t" << stats.readsAfterFiltering << "\t(-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
     }
     else
     {
         stream << "Total reads                          : " << stats.totalReads << std::endl;
-        stream << "Filtered reads (-fc Option)          : " << stats.filteredReads << std::endl;
+        stream << "Filtered reads (-fc Option)          : -" << stats.filteredReads << std::endl;
+        stream << "Non mappable reads                   : -" << stats.couldNotMap << std::endl;
+        stream << "Non uniquely mappable reads          : -" << stats.couldNotMapUniquely << std::endl;
+        stream << "                                     : -----------------" << std::endl;
         stream << "Mapped reads                         : " << stats.totalMappedReads << std::endl;
-        stream << "Non mappable reads                   : " << stats.couldNotMap << std::endl;
-        stream << "Non uniquely mappable reads          : " << stats.couldNotMapUniquely << std::endl;
-        stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << " (-" << stats.removedReads << ")" << std::endl;
+        stream << "Removed duplet reads                 : -" << stats.removedReads << std::endl;
+        stream << "                                     : -----------------" << std::endl;
+        stream << "After barcode filtering              : " << stats.totalMappedReads - stats.removedReads << std::endl;
+        stream << std::endl;
         stream << "PCR duplication rate                 : " << static_cast<float>(stats.removedReads) / static_cast<float>(stats.totalMappedReads) << std::endl;
-        stream << "Total duplet reads                   : " << stats.totalSamePositionReads << std::endl;
         if (clusterFiltering)
             stream << "After cluster filtering              : " << stats.readsAfterFiltering << " (-" << stats.totalMappedReads - stats.removedReads - stats.readsAfterFiltering << ")" << std::endl;
     }
