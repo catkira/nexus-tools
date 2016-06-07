@@ -9,6 +9,7 @@ License: LGPL
 #include <seqan/bed_io.h>
 #include <seqan/seq_io.h>
 #include <seqan/sequence.h>
+#include <random>
 
 #include "readsim.h"
 
@@ -40,7 +41,7 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, adapterOpt);
 
     seqan::ArgParseOption numReadsOpt = seqan::ArgParseOption(
-        "n", "num_reads", "Number of reads to generate.",
+        "n", "num_peaks", "Number of peaks to generate.",
         seqan::ArgParseOption::INTEGER, "VALUE");
     setMinValue(numReadsOpt, "0");
     addOption(parser, numReadsOpt);
@@ -48,11 +49,13 @@ seqan::ArgumentParser buildParser(void)
     seqan::ArgParseOption fixedBarcodeOpt = seqan::ArgParseOption(
         "fb", "barcode", "fixed barcode for Chip Nexus reads",
         seqan::ArgParseOption::STRING, "SEQUENCE");
+    setDefaultValue(fixedBarcodeOpt, "CTAG");
     addOption(parser, fixedBarcodeOpt);
 
     seqan::ArgParseOption randomBarcodeOpt = seqan::ArgParseOption(
         "rb", "random_barcode", "number of bases for random barcode",
         seqan::ArgParseOption::INTEGER, "VALUE");
+    setDefaultValue(randomBarcodeOpt, 5);
     addOption(parser, randomBarcodeOpt);
 
     seqan::ArgParseOption readLengthOpt = seqan::ArgParseOption(
@@ -62,6 +65,40 @@ seqan::ArgumentParser buildParser(void)
     addOption(parser, readLengthOpt);
 
     return parser;
+}
+
+void generateRandomBarcode(std::string& randomBarcode, const int n)
+{
+    randomBarcode.clear();
+    if (n <= 0)
+        return;
+    for (unsigned int k = 0; k < n;k++)
+    {
+        switch (rand() % 4) {
+        case 0:
+            randomBarcode.append("A"); break;
+        case 1:
+            randomBarcode.append("C"); break;
+        case 2:
+            randomBarcode.append("G"); break;
+        case 3:
+            randomBarcode.append("T"); break;
+        }
+    }
+}
+
+void substituteAdapter(std::string& read, const std::vector<std::string> adapters)
+{
+    unsigned int minAdapterLength = 4;
+    unsigned int maxAdapterLength = 20;
+
+    std::default_random_engine generator;
+    std::uniform_int_distribution<unsigned int> distribution(minAdapterLength, maxAdapterLength);
+    unsigned int adapter = rand() % adapters.size();
+    unsigned int adapterLength = distribution(generator);
+    if (adapterLength > adapters[adapter].size())
+        adapterLength = adapters[adapter].size();
+    read.replace(read.size() - adapterLength, adapterLength, adapters[adapter].substr(0,adapterLength));
 }
 
 int main(int argc, char const ** argv)
@@ -123,21 +160,54 @@ int main(int argc, char const ** argv)
         getOptionValue(numReads, parser, "n");
 
     std::string fixedBarcode;
-    if (isSet(parser, "fb"))
-        getOptionValue(fixedBarcode, parser, "fb");
+    getOptionValue(fixedBarcode, parser, "fb");
 
     int numRandomBarcode = -1;
-    if (isSet(parser, "rb"))
-        getOptionValue(numRandomBarcode, parser, "rb");
+    getOptionValue(numRandomBarcode, parser, "rb");
 
     int readLength = 0;
     getOptionValue(readLength, parser, "rl");
 
+    const unsigned int peakHalfWidth = 10;
+    const unsigned int peakStdDev = 10;
+    const unsigned int peakNumReads = 50;
+
+    std::default_random_engine generator;
+    std::normal_distribution<float> distribution((float)peakHalfWidth, (float)peakStdDev);
+
+    unsigned int numPCRArtifacts = 0;
+    unsigned int numAdapters = 0;
 
     for (unsigned int n = 0;n < numReads;++n)
     {
+        unsigned int peakPos = rand() % (refGenome.size() - readLength - peakHalfWidth*2 + numRandomBarcode + fixedBarcode.size());
+        unsigned int k = 0;
+        while(k<peakNumReads)
+        {
+            unsigned int pos = (unsigned int)distribution(generator);
+            if (pos < peakPos - peakHalfWidth || peakPos > peakPos + peakHalfWidth)
+                continue;
+            pos += peakPos;
+            // add fixed and random barcode
+            std::string randomBarcode;
+            generateRandomBarcode(randomBarcode, numRandomBarcode);
+            std::string read = randomBarcode + fixedBarcode + refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size());
+            // add adapter
+            substituteAdapter(read, adapters);
+            ++numAdapters;
+            // add PCR artifacts
+            unsigned int PCRArtifactPercentage = 10;
+            if ((rand() % 100) < PCRArtifactPercentage)
+            {
+                std::cout << pos << ": " << read << std::endl;
+                ++numPCRArtifacts;
+            }
 
+            std::cout << pos << ": " << read << std::endl;
+            ++k;
+        }
     }
 
 
 }
+               
