@@ -10,6 +10,7 @@ License: LGPL
 #include <seqan/seq_io.h>
 #include <seqan/sequence.h>
 #include <random>
+#include <boost/algorithm/string.hpp>
 
 #include "readsim.h"
 
@@ -64,6 +65,12 @@ seqan::ArgumentParser buildParser(void)
     setDefaultValue(readLengthOpt, 44);
     addOption(parser, readLengthOpt);
 
+    seqan::ArgParseOption outPrefixOpt = seqan::ArgParseOption(
+        "o", "output_filename", "Base filename of output file without suffix",
+        seqan::ArgParseOption::STRING, "STRING");
+    setDefaultValue(outPrefixOpt, "readsim_out");
+    addOption(parser, outPrefixOpt);
+
     return parser;
 }
 
@@ -87,7 +94,7 @@ void generateRandomBarcode(std::string& randomBarcode, const int n)
     }
 }
 
-void substituteAdapter(std::string& read, const std::vector<std::string> adapters)
+unsigned int substituteAdapter(std::string& read, const std::vector<std::string> adapters)
 {
     unsigned int minAdapterLength = 4;
     unsigned int maxAdapterLength = 20;
@@ -99,6 +106,7 @@ void substituteAdapter(std::string& read, const std::vector<std::string> adapter
     if (adapterLength > adapters[adapter].size())
         adapterLength = adapters[adapter].size();
     read.replace(read.size() - adapterLength, adapterLength, adapters[adapter].substr(0,adapterLength));
+    return adapterLength;
 }
 
 int main(int argc, char const ** argv)
@@ -130,6 +138,7 @@ int main(int argc, char const ** argv)
             readRecord(id, bases, genomeFile);
             refGenome.append(bases);
         }
+        boost::to_upper(refGenome);
         std::cout <<"    read "<<refGenome.size() << " bases" << std::endl;
     }
     std::vector<std::string> adapters;
@@ -150,10 +159,12 @@ int main(int argc, char const ** argv)
             std::string id;
             std::string adapter;
             readRecord(id, adapter, adapterFile);
+            boost::to_upper(adapter);
             adapters.emplace_back(adapter);
         }
         std::cout << "    read " << adapters.size() << " adapters" << std::endl;
     }
+    std::cout << std::endl;
 
     int numReads = 0;
     if (isSet(parser, "n"))
@@ -161,12 +172,17 @@ int main(int argc, char const ** argv)
 
     std::string fixedBarcode;
     getOptionValue(fixedBarcode, parser, "fb");
+    boost::to_upper(fixedBarcode);
 
     int numRandomBarcode = -1;
     getOptionValue(numRandomBarcode, parser, "rb");
 
     int readLength = 0;
     getOptionValue(readLength, parser, "rl");
+
+    std::string outPrefix;
+    getOptionValue(outPrefix, parser, "o");
+
 
     const unsigned int peakHalfWidth = 10;
     const unsigned int peakStdDev = 10;
@@ -178,6 +194,11 @@ int main(int argc, char const ** argv)
     unsigned int numPCRArtifacts = 0;
     unsigned int numAdapters = 0;
 
+    seqan::SeqFileOut rawReads;
+    open(rawReads, std::string(outPrefix + ".fq").c_str());
+    seqan::SeqFileOut preprocessedReads;
+    open(preprocessedReads, std::string(outPrefix + "_preprocessed.fq").c_str());
+    unsigned int nRead = 0;
     for (unsigned int n = 0;n < numReads;++n)
     {
         unsigned int peakPos = rand() % (refGenome.size() - readLength - peakHalfWidth*2 + numRandomBarcode + fixedBarcode.size());
@@ -193,21 +214,32 @@ int main(int argc, char const ** argv)
             generateRandomBarcode(randomBarcode, numRandomBarcode);
             std::string read = randomBarcode + fixedBarcode + refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size());
             // add adapter
-            substituteAdapter(read, adapters);
+            const auto adapterLength = substituteAdapter(read, adapters);
+            seqan::Dna5QString temp = read;
+            writeRecord(rawReads, std::to_string(nRead), temp);
+            writeRecord(preprocessedReads, std::to_string(nRead), refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size() - adapterLength));
+            ++nRead;
             ++numAdapters;
             // add PCR artifacts
             unsigned int PCRArtifactPercentage = 10;
             if ((rand() % 100) < PCRArtifactPercentage)
             {
-                std::cout << pos << ": " << read << std::endl;
+                seqan::Dna5QString temp = read;
+                writeRecord(rawReads, std::to_string(nRead), temp);
+                writeRecord(preprocessedReads, std::to_string(nRead), refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size() - adapterLength));
+                ++numAdapters;
                 ++numPCRArtifacts;
+                ++nRead;
             }
-
-            std::cout << pos << ": " << read << std::endl;
             ++k;
         }
     }
+    std::cout << "Output statistics" << std::endl;
+    std::cout << "Number of reads         :\t" << nRead << std::endl;
+    std::cout << "Number of PCR-artifacts :\t" << numPCRArtifacts << std::endl;
 
+    close(rawReads);
+    close(preprocessedReads);
 
 }
                
