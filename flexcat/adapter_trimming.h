@@ -757,7 +757,7 @@ namespace AdapterSelectionMethod
 {
     struct TopDown {};
     struct Best {};
-};
+}
 
 
 // convenience wrapper
@@ -781,7 +781,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
     unsigned removedTotal{ 0 };
     AlignResult<TReadLen> alignResult;  // small object, created on stack
     AlignResult<TReadLen> bestAlignResult;  // small object, created on stack
-    decltype(tlsBlock.params.adapters)::value_type bestAdapter;
+    typename decltype(tlsBlock.params.adapters)::value_type bestAdapter;
     unsigned removedTotalOld = 0;
     TReadLen lenSeq = length(seq);
 
