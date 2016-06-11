@@ -136,9 +136,15 @@ void adapterTrimmingStage(std::vector<TRead>& reads, TlsBlock& tlsBlock)
     if (!tlsBlock.params.run)
         return;
     if(tlsBlock.params.tag)
-        stripAdapterBatch(reads, tlsBlock, TagAdapter<true>());
+        if(tlsBlock.params.best)
+            stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::Best());
+        else
+            stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::TopDown());
     else
-        stripAdapterBatch(reads, tlsBlock, TagAdapter<false>());
+        if (tlsBlock.params.best)
+            stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::Best());
+        else
+            stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::TopDown());
 }
 
 // QUALITY TRIMMING
@@ -858,7 +864,11 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
             unsigned times;
             getOptionValue(times, parser, "times");
             std::cout << "\tMax adapter trimming iterations " << times << "\n";
-			std::cout << "\n";
+            if (isSet(parser, "best"))
+                std::cout << "\tAdapter selection method: best\n";
+            else
+                std::cout << "\tAdapter selection method: top-down\n";
+            std::cout << "\n";
         }
         if (qualityTrimmingParams.run)
         {

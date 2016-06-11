@@ -385,6 +385,11 @@ void ArgumentParserBuilder::addAdapterTrimmingOptions(seqan::ArgumentParser & pa
     setDefaultValue(timesOpt, 1);
     addOption(parser, timesOpt);
 
+    seqan::ArgParseOption bestOpt = seqan::ArgParseOption(
+        "best", "best", "Trim best matching adapters, if multiple adapters are specified");
+    addOption(parser, bestOpt);
+
+
     if (flexiProgram != FlexiProgram::ALL_STEPS)
     {
         seqan::ArgParseOption adTagOpt = seqan::ArgParseOption(
@@ -664,6 +669,7 @@ int loadAdapterTrimmingParams(seqan::ArgumentParser const& parser, AdapterTrimmi
     getOptionValue(er, parser, "er");
     getOptionValue(oh, parser, "oh");
     getOptionValue(times, parser, "times");
+    getOptionValue(params.best, parser, "best");
     params.mode = AdapterMatchSettings(o, e, er, oh, times);
 
     // ADAPTER SEQUENCES ----------------------------
