@@ -693,14 +693,17 @@ inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, c
     if (overlap == 0)
         return false;
     unsigned int allowedMismatches = static_cast<unsigned int>(adatperMatchSettings.errorRate * static_cast<float>(overlap));
-    if (overlap < 6)
-        allowedMismatches = 0;
-    else if (overlap < 10)
-        allowedMismatches = std::min<unsigned int>(allowedMismatches, 1);
     if (adatperMatchSettings.errorRate > 0)
-        return overlap >= adatperMatchSettings.min_length && mismatches <= allowedMismatches;
+    {
+        if (overlap < 6)
+            allowedMismatches = 0;
+        else if (overlap < 10)
+            allowedMismatches = std::min<unsigned int>(allowedMismatches, 1);
+    }
     else
-        return overlap >= adatperMatchSettings.min_length && mismatches <= adatperMatchSettings.errors;
+        allowedMismatches = adatperMatchSettings.errors;
+
+    return overlap >= adatperMatchSettings.min_length && mismatches <= allowedMismatches;
 }
 
 enum adapterDirection : bool
