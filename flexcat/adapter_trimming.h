@@ -692,8 +692,13 @@ inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, c
 {
     if (overlap == 0)
         return false;
+    unsigned int allowedMismatches = static_cast<unsigned int>(adatperMatchSettings.errorRate * static_cast<float>(overlap));
+    if (overlap < 6)
+        allowedMismatches = 0;
+    else if (overlap < 10)
+        allowedMismatches = std::min<unsigned int>(allowedMismatches, 1);
     if (adatperMatchSettings.errorRate > 0)
-        return overlap >= adatperMatchSettings.min_length && (static_cast<double>(mismatches) / static_cast<double>(overlap)) <= adatperMatchSettings.errorRate;
+        return overlap >= adatperMatchSettings.min_length && mismatches <= allowedMismatches;
     else
         return overlap >= adatperMatchSettings.min_length && mismatches <= adatperMatchSettings.errors;
 }
