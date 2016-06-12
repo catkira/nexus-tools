@@ -789,7 +789,6 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
 
     for (unsigned int n = 0;n < tlsBlock.params.mode.times; ++n)
     {
-        alignResult.score = AlignResult<TReadLen>::noMatch;
         bestAlignResult.score = AlignResult<TReadLen>::noMatch;
         for (auto const& adapterItem : tlsBlock.params.adapters)
         {
