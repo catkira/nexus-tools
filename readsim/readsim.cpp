@@ -60,6 +60,13 @@ seqan::ArgumentParser buildParser(void)
     setMinValue(numReadsOpt, "0");
     addOption(parser, numReadsOpt);
 
+    seqan::ArgParseOption erOpt = seqan::ArgParseOption(
+        "er", "error-rate", "Error rate in generated reads",
+        seqan::ArgParseOption::DOUBLE, "VALUE");
+    setDefaultValue(erOpt, 0.2);
+    addOption(parser, erOpt);
+
+
     seqan::ArgParseOption fixedBarcodeOpt = seqan::ArgParseOption(
         "fb", "barcode", "fixed barcode for Chip Nexus reads",
         seqan::ArgParseOption::STRING, "SEQUENCE");
@@ -97,6 +104,21 @@ seqan::ArgumentParser buildParser(void)
     return parser;
 }
 
+char getRandomBase()
+{
+    switch (rand() % 4) {
+    case 0:
+        return 'A'; break;
+    case 1:
+        return 'C'; break;
+    case 2:
+        return 'G'; break;
+    case 3:
+        return 'T'; break;
+    }
+    return 'A';
+}
+
 void generateRandomBarcode(std::string& randomBarcode, const int n)
 {
     randomBarcode.clear();
@@ -119,7 +141,7 @@ void generateRandomBarcode(std::string& randomBarcode, const int n)
 
 unsigned int substituteAdapter(std::string& read, const std::vector<std::string> adapters)
 {
-    unsigned int minAdapterLength = 4;
+    unsigned int minAdapterLength = 0;
     unsigned int maxAdapterLength = 20;
 
     std::random_device rd;
@@ -127,11 +149,54 @@ unsigned int substituteAdapter(std::string& read, const std::vector<std::string>
     std::uniform_int_distribution<unsigned int> distribution(minAdapterLength, maxAdapterLength);
     unsigned int adapter = rand() % adapters.size();
     unsigned int adapterLength = distribution(generator);
+    if (rand() % 2) // only add adapters in 50% of all cases
+        adapterLength = 0;
 
     if (adapterLength > adapters[adapter].size())
         adapterLength = adapters[adapter].size();
     read.replace(read.size() - adapterLength, adapterLength, adapters[adapter].substr(0,adapterLength));
     return adapterLength;
+}
+
+unsigned int insertErrors(std::string& read, const double er)
+{
+    unsigned int nErrors = 0;
+    auto it = read.begin();
+    while (it != read.end())
+    {
+        if ((rand() % 100) < (unsigned int)(er * 100))
+        {
+            *it = getRandomBase();
+            ++nErrors;
+        }
+        ++it;
+    }
+    return nErrors;
+}
+
+float Sen(unsigned int TP, unsigned int FN)
+{
+    return static_cast<float>(TP) / static_cast<float>(TP + FN);
+}
+
+float Spec(unsigned int TN, unsigned int FP)
+{
+    return static_cast<float>(TN) / static_cast<float>(TN + FP);
+}
+
+float PPV(unsigned int TP, unsigned int FP)
+{
+    return static_cast<float>(TP) / static_cast<float>(TP + FP);
+}
+
+float NPV(unsigned int TN, unsigned int FN)
+{
+    return static_cast<float>(TN) / static_cast<float>(TN + FN);
+}
+
+double MCC(unsigned int TN, unsigned int FN, unsigned int TP, unsigned int FP)
+{
+    return ((double)TP*TN - (double)FP*FN) / sqrt((double)(TP + FP)*(double)(TP + FN)*(double)(TN + FP)*(double)(TN + FN));
 }
 
 int main(int argc, char const ** argv)
@@ -166,18 +231,27 @@ int main(int argc, char const ** argv)
         std::map<std::string, unsigned int> refReads;
         std::cout << "Reading reference file... ";
         unsigned int nBases = 0;
+        unsigned int maxLen = 0;
+        unsigned int n = 0;
         while (!atEnd(refFile))
         {
             std::string id;
             std::string bases;
             readRecord(id, bases, refFile);
             refReads[id] = bases.size();
+            if (bases.size() > maxLen)
+                maxLen = bases.size();
             nBases += bases.size();
+            ++n;
         }
         std::cout << refReads.size() << " reads" << std::endl;
         std::cout << "Comparing reads... ";
-        unsigned int n = 0;
+        n = 0;
         unsigned int matches = 0;
+        unsigned int TN = 0;
+        unsigned int TP = 0;
+        unsigned int TNb = 0;
+        unsigned int TPb = 0;
         unsigned int overtrimmed = 0;
         unsigned int nOvertrimmed = 0;
         unsigned int undertrimmed = 0;
@@ -189,7 +263,19 @@ int main(int argc, char const ** argv)
             readRecord(id, bases, preFile);
             const auto it = refReads.find(id);
             if (it->second == bases.size())
+            {
+                if (it->second == maxLen)
+                {
+                    ++TN;
+                    TNb += it->second;
+                }
+                else
+                {
+                    ++TP;
+                    TPb += it->second;
+                }
                 ++matches;
+            }
             else if (it->second > bases.size())
             {
                 ++overtrimmed;
@@ -200,19 +286,54 @@ int main(int argc, char const ** argv)
                 ++undertrimmed;
                 nUndertrimmed += static_cast<unsigned int>(bases.size() - it->second);
             }
+            it->second = 0;
             ++n;
         }
+        auto it = refReads.begin();
+        while (it != refReads.end())
+        {
+            if (it->second > 0)
+            {
+                ++overtrimmed;
+                nOvertrimmed += it->second;
+            }
+            ++it;
+        }
+
         std::cout << n << " reads" << std::endl;
 
         std::cout << "\n\nStatistics\n";
-        std::cout <<     "----------\n";
+        std::cout << "----------\n";
         std::cout << "Number of reads in reference file    : " << refReads.size() << std::endl;
         std::cout << "Number of reads in preprocessed file : " << n << std::endl;
-        std::cout << "Number of correctly trimmed reads    : " << matches << " ("<< (float)matches/(float)refReads.size() * 100<<"%)" << std::endl;
+
+        std::cout << "---------- per read ----------\n";
+        assert(TN + TP == matches);
+        const auto FP = overtrimmed;
+        const auto FN = undertrimmed;
+        assert(TN + TP + FN + FP == refReads.size());
+        std::cout << "Number of correctly trimmed reads    : " << matches << " (" << (float)(TN+TP) / (float)refReads.size() * 100 << "%)" << std::endl;
         std::cout << "Number of over trimmed reads         : " << overtrimmed << " (" << (float)overtrimmed / (float)refReads.size() * 100 << "%)" << std::endl;
-        std::cout << "Number of over trimmed bases         : " << nOvertrimmed << " (" << (float)nOvertrimmed / (float)nBases * 100 << "%)" << std::endl;
         std::cout << "Number of under trimmed reads        : " << undertrimmed << " (" << (float)undertrimmed / (float)refReads.size() * 100 << "%)" << std::endl;
+        std::cout << "Sensitivity_r                        : " << Sen(TP, FN) << std::endl;
+        std::cout << "Specificity_r                        : " << Spec(TN, FP) << std::endl;
+        std::cout << "PPV_r                                : " << PPV(TP, FP) << std::endl;
+        std::cout << "NPV_r                                : " << NPV(TN, FN) << std::endl;
+        std::cout << "MCC_r                                : " << MCC(TN, FN, TP, FP) << std::endl;
+
+        std::cout << "---------- per base ----------\n";
+        const auto FPb = nOvertrimmed;
+        const auto FNb = nUndertrimmed;
+        assert(TNb + TPb + FNb + FPb == nBases);
+
+        std::cout << "Number of correctly trimmed bases    : " << matches << " (" << (float)(TNb + TPb) / (float)nBases * 100 << "%)" << std::endl;
+        std::cout << "Number of over trimmed bases         : " << nOvertrimmed << " (" << (float)nOvertrimmed / (float)nBases * 100 << "%)" << std::endl;
         std::cout << "Number of under trimmed bases        : " << nUndertrimmed << " (" << (float)nUndertrimmed / (float)nBases * 100 << "%)" << std::endl;
+        std::cout << "Sensitivity_b                        : " << Sen(TPb, FNb) << std::endl;
+        std::cout << "Specificity_b                        : " << Spec(TNb, FPb) << std::endl;
+        std::cout << "PPV_b                                : " << PPV(TPb, FPb) << std::endl;
+        std::cout << "NPV_b                                : " << NPV(TNb, FNb) << std::endl;
+        std::cout << "MCC_b                                : " << MCC(TNb, FNb, TPb, FPb) << std::endl;
 
         close(refFile);
         close(preFile);
@@ -284,6 +405,8 @@ int main(int argc, char const ** argv)
     std::string outPrefix;
     getOptionValue(outPrefix, parser, "o");
 
+    double er = 0;
+    getOptionValue(er, parser, "er");
 
     const unsigned int peakHalfWidthMean = 10;
     const unsigned int peakHalfWidthStdDev = 10;
@@ -303,6 +426,8 @@ int main(int argc, char const ** argv)
     seqan::SeqFileOut preprocessedReads;
     open(preprocessedReads, std::string(outPrefix + "_preprocessed.fq").c_str());
     unsigned int nRead = 0;
+    unsigned int nErrors = 0;
+    unsigned int nGeneratedBases = 0;
     while(nRead<numReads)
     {
         unsigned int peakPos = rand() % (refGenome.size() - readLength - peakHalfWidthMean*4 + numRandomBarcode + fixedBarcode.size());
@@ -321,10 +446,15 @@ int main(int argc, char const ** argv)
             std::string read = randomBarcode + fixedBarcode + refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size());
             // add adapter
             const auto adapterLength = substituteAdapter(read, adapters);
+            
+            // insert errors
+            nErrors += insertErrors(read, er);
+
             seqan::Dna5QString temp = read;
             writeRecord(rawReads, std::to_string(nRead), temp);
             seqan::Dna5QString temp2 = refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size() - adapterLength);
             writeRecord(preprocessedReads, std::to_string(nRead), temp2);
+            nGeneratedBases += read.size();
             ++nRead;
             ++numAdapters;
             // add PCR artifacts
@@ -333,6 +463,7 @@ int main(int argc, char const ** argv)
             {
                 writeRecord(rawReads, std::to_string(nRead) + "_PCR_artifact", temp);
                 writeRecord(preprocessedReads, std::to_string(nRead) + "_PCR_artifact", temp2);
+                nGeneratedBases += read.size();
                 ++numAdapters;
                 ++numPCRArtifacts;
                 ++nRead;
@@ -343,6 +474,7 @@ int main(int argc, char const ** argv)
     std::cout << "Output statistics" << std::endl;
     std::cout << "Number of reads         :\t" << nRead << std::endl;
     std::cout << "Number of PCR-artifacts :\t" << numPCRArtifacts << std::endl;
+    std::cout << "Number of errors        :\t" << nErrors << " (" << (float)nErrors/(float)nGeneratedBases  << "%)"<<std::endl;
 
     close(rawReads);
     close(preprocessedReads);
