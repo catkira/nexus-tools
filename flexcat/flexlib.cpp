@@ -871,9 +871,9 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
 				return 1;
 			}
             if (isSet(parser, "nler"))
-                std::cout << "\tNon-linear error-rate: yes\n";
+                std::cout << "\tError-rate mode: non-linear\n";
             else
-                std::cout << "\tNon-linear error-rate: no\n";
+                std::cout << "\tError-rate mode: linear\n";
             if (isSet(parser, "oh"))
             {
                 unsigned overhang;

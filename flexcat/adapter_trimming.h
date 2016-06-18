@@ -726,7 +726,7 @@ inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, c
 }
 
 // convenience wrapper
-inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, const AdapterMatchSettings &adatperMatchSettings) noexcept
+inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, const AdapterMatchSettings &) noexcept
 {
     return isMatch(overlap, mismatches, AdapterMatchSettings(), ErrorRateMode::linear());
 }
