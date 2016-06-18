@@ -163,6 +163,7 @@ struct AdapterTrimmingParams
     AdapterMatchSettings mode;
     bool tag;
     bool best;
+    bool nler;
     AdapterTrimmingParams() : pairedNoAdapterFile(false), run(false), tag(false), best(false) {};
 };
 
@@ -687,8 +688,26 @@ unsigned stripPair(TSeq& seq1, TSeq& seq2) noexcept
     return insert;
 }
 
-//Version for automatic matching options
-inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, const AdapterMatchSettings &adatperMatchSettings) noexcept
+namespace ErrorRateMode
+{
+    struct linear {};
+    struct nonLinear {};
+}
+
+inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, const AdapterMatchSettings &adatperMatchSettings,
+    const ErrorRateMode::linear&) noexcept
+{
+    if (overlap == 0)
+        return false;
+    unsigned int allowedMismatches = static_cast<unsigned int>(adatperMatchSettings.errorRate * static_cast<float>(overlap));
+    if (adatperMatchSettings.errorRate == 0)
+        allowedMismatches = adatperMatchSettings.errors;
+
+    return overlap >= adatperMatchSettings.min_length && mismatches <= allowedMismatches;
+}
+
+inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, const AdapterMatchSettings &adatperMatchSettings,
+    const ErrorRateMode::nonLinear&) noexcept
 {
     if (overlap == 0)
         return false;
@@ -705,6 +724,13 @@ inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, c
 
     return overlap >= adatperMatchSettings.min_length && mismatches <= allowedMismatches;
 }
+
+// convenience wrapper
+inline bool isMatch(const unsigned int overlap, const unsigned int mismatches, const AdapterMatchSettings &adatperMatchSettings) noexcept
+{
+    return isMatch(overlap, mismatches, AdapterMatchSettings(), ErrorRateMode::linear());
+}
+
 
 enum adapterDirection : bool
 {
@@ -767,7 +793,6 @@ namespace AdapterSelectionMethod
     struct Best {};
 }
 
-
 // convenience wrapper
 template <typename TSeq, typename TAdapters, typename TReadLen, typename TStripAdapterDirection>
 unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapters const& adapters, AdapterMatchSettings const& spec,
@@ -777,11 +802,11 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
     params.adapters = adapters;
     params.mode = spec;
     TlsBlockAdapterTrimming<AdapterTrimmingStats<TReadLen>> tlsBlock(stats, params);
-    return stripAdapter(seq, tlsBlock, stripDirection, AdapterSelectionMethod::Best());
+    return stripAdapter(seq, tlsBlock, stripDirection, AdapterSelectionMethod::Best(), ErrorRateMode::linear());
 }
 
-template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock>
-unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::Best&)
+template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock, typename TErrorRateMode>
+unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::Best&, const TErrorRateMode&)
 {
     AlignAlgorithm::Menkuec alignAlgorithm;
 
@@ -816,7 +841,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode))
+            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 if (alignResult.score > bestAlignResult.score)
                 {
@@ -882,8 +907,8 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
 }
 
 
-template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock>
-unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::TopDown&)
+template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock, typename TErrorRateMode>
+unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::TopDown&, const TErrorRateMode&)
 {
     AlignAlgorithm::Menkuec alignAlgorithm;
 
@@ -916,7 +941,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode))
+            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 TReadLen eraseStart = 0;
                 TReadLen eraseEnd = 0;
@@ -968,15 +993,16 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
     return removedTotal;
 }
 
-template < template <typename> class TRead, typename TSeq, typename TlsBlock, typename TTagAdapter, typename TAdapterSelectionMethod,
+template < template <typename> class TRead, typename TSeq, typename TlsBlock, typename TTagAdapter, 
+    typename TAdapterSelectionMethod, typename TErrorRateMode,
     typename = std::enable_if_t<std::is_same<TRead<TSeq>, Read<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplex<TSeq>>::value> >
-    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TlsBlock& tlsBlock, TTagAdapter, TAdapterSelectionMethod, bool = false) noexcept(!TTagAdapter::value)
+    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TlsBlock& tlsBlock, TTagAdapter, TAdapterSelectionMethod, TErrorRateMode, bool = false) noexcept(!TTagAdapter::value)
 {
     for (auto& read : reads)
     {
         if (seqan::empty(read.seq))
             continue;
-        const unsigned over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod());
+        const unsigned over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod(), TErrorRateMode());
         if (TTagAdapter::value && over != 0)
             insertAfterFirstToken(read.id, ":AdapterRemoved");
     }
@@ -984,9 +1010,10 @@ template < template <typename> class TRead, typename TSeq, typename TlsBlock, ty
 }
 
 // pairedEnd adapters will be trimmed in single mode, each seperately
-template < template <typename> class TRead, typename TSeq, typename TlsBlock, typename TTagAdapter, typename TAdapterSelectionMethod,
+template < template <typename> class TRead, typename TSeq, typename TlsBlock, typename TTagAdapter, 
+    typename TAdapterSelectionMethod, typename TErrorRateMode,
     typename = std::enable_if_t<std::is_same<TRead<TSeq>, ReadPairedEnd<TSeq>>::value || std::is_same<TRead<TSeq>, ReadMultiplexPairedEnd<TSeq>>::value> >
-    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TlsBlock& tlsBlock, TTagAdapter, TAdapterSelectionMethod) noexcept(!TTagAdapter::value)
+    void stripAdapterBatch(std::vector<TRead<TSeq>>& reads, TlsBlock& tlsBlock, TTagAdapter, TAdapterSelectionMethod, TErrorRateMode) noexcept(!TTagAdapter::value)
 {
     for (auto& read : reads)
     {
@@ -999,9 +1026,9 @@ template < template <typename> class TRead, typename TSeq, typename TlsBlock, ty
         }
         else
         {
-            over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod());
+            over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod(), TErrorRateMode());
             if (!seqan::empty(read.seqRev))
-                over += stripAdapter(read.seqRev, tlsBlock, StripAdapterDirection<adapterDirection::reverse>(), TAdapterSelectionMethod());
+                over += stripAdapter(read.seqRev, tlsBlock, StripAdapterDirection<adapterDirection::reverse>(), TAdapterSelectionMethod(), TErrorRateMode());
         }
         if (TTagAdapter::value && over != 0)
             insertAfterFirstToken(read.id, ":AdapterRemoved");

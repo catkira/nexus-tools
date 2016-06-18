@@ -137,14 +137,26 @@ void adapterTrimmingStage(std::vector<TRead>& reads, TlsBlock& tlsBlock)
         return;
     if(tlsBlock.params.tag)
         if(tlsBlock.params.best)
-            stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::Best());
+            if(tlsBlock.params.nler)
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::Best(), ErrorRateMode::nonLinear());
+            else
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::Best(), ErrorRateMode::linear());
         else
-            stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::TopDown());
+            if (tlsBlock.params.nler)
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::TopDown(), ErrorRateMode::nonLinear());
+            else
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::TopDown(), ErrorRateMode::linear());
     else
         if (tlsBlock.params.best)
-            stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::Best());
+            if (tlsBlock.params.nler)
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::Best(), ErrorRateMode::nonLinear());
+            else
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::Best(), ErrorRateMode::linear());
         else
-            stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::TopDown());
+            if (tlsBlock.params.nler)
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::TopDown(), ErrorRateMode::nonLinear());
+            else
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::TopDown(), ErrorRateMode::linear());
 }
 
 // QUALITY TRIMMING
@@ -833,28 +845,35 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
                     std::cout << "\tPaired end Mode: with adapter file\n";
                 }
             }
+            unsigned o = 0;
+            getOptionValue(o, parser, "overlap");
+            std::cout << "\tMinimum overlap " << o << "\n";
             if (isSet(parser, "e") && !isSet(parser, "er"))
             {
-                unsigned e, o;
+                unsigned e;
                 getOptionValue(e, parser, "e");
-                getOptionValue(o, parser, "overlap");
-				std::cout << "\tAllowed mismatches: " << e << "\n";
-                std::cout << "\tMinimum overlap " << o << "\n";
+                std::cout << "\tAllowed mismatches: " << e << "\n";
             }
 			else if (!isSet(parser, "e") && isSet(parser, "er"))
 			{
-				unsigned o;
 				double er;
 				getOptionValue(er, parser, "er");
-				getOptionValue(o, parser, "overlap");
 				std::cout << "\tAllowed error rate: " << er << "\n";
-				std::cout << "\tMinimum overlap " << o << "\n";
 			}
-			else
+            else if ((!isSet(parser, "e") && !isSet(parser, "er")))
+            {
+                std::cout << "\nWarning: either errors or error rate need to be specified.\n";
+                return 1;
+            }
+            else
 			{
 				std::cout << "\nWarning: errors and error rate can not be specified both at the same time.\n";
 				return 1;
 			}
+            if (isSet(parser, "nler"))
+                std::cout << "\tNon-linear error-rate: yes\n";
+            else
+                std::cout << "\tNon-linear error-rate: no\n";
             if (isSet(parser, "oh"))
             {
                 unsigned overhang;
