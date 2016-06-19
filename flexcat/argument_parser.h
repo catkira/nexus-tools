@@ -679,7 +679,7 @@ int loadAdapterTrimmingParams(seqan::ArgumentParser const& parser, AdapterTrimmi
     getOptionValue(oh, parser, "oh");
     getOptionValue(times, parser, "times");
     getOptionValue(params.nler, parser, "nler");
-    if (!isSet(parser, "topDown"))
+    if (!isSet(parser, "topdown"))
         params.best = true;
     params.mode = AdapterMatchSettings(o, e, er, oh, times);
 
