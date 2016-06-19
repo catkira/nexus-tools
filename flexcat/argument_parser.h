@@ -391,8 +391,12 @@ void ArgumentParserBuilder::addAdapterTrimmingOptions(seqan::ArgumentParser & pa
     addOption(parser, timesOpt);
 
     seqan::ArgParseOption bestOpt = seqan::ArgParseOption(
-        "best", "best", "Trim best matching adapters, if multiple adapters are specified");
+        "best", "best", "Trim best matching adapters, if multiple adapters are specified.");
     addOption(parser, bestOpt);
+
+    seqan::ArgParseOption topdownOpt = seqan::ArgParseOption(
+        "topdown", "topdown", "Trim adapters in the order they are specified, first match will be taken.");
+    addOption(parser, topdownOpt);
 
 
     if (flexiProgram != FlexiProgram::ALL_STEPS)
@@ -675,7 +679,8 @@ int loadAdapterTrimmingParams(seqan::ArgumentParser const& parser, AdapterTrimmi
     getOptionValue(oh, parser, "oh");
     getOptionValue(times, parser, "times");
     getOptionValue(params.nler, parser, "nler");
-    getOptionValue(params.best, parser, "best");
+    if (!isSet(parser, "topDown"))
+        params.best = true;
     params.mode = AdapterMatchSettings(o, e, er, oh, times);
 
     // ADAPTER SEQUENCES ----------------------------

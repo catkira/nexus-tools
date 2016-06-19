@@ -883,7 +883,12 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
             unsigned times;
             getOptionValue(times, parser, "times");
             std::cout << "\tMax adapter trimming iterations " << times << "\n";
-            if (isSet(parser, "best"))
+            if (isSet(parser, "best") && isSet(parser, "topdown"))
+            {
+                std::cout << "\nError: --best and --topdown can not be specified at the same time.\n";
+                return -1;
+            }
+            if (!isSet(parser, "topdown"))
                 std::cout << "\tAdapter selection method: best\n";
             else
                 std::cout << "\tAdapter selection method: top-down\n";
