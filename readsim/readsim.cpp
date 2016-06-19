@@ -119,7 +119,7 @@ char getRandomBase()
     return 'A';
 }
 
-void generateRandomBarcode(std::string& randomBarcode, const int n)
+void generateRandomBarcode(std::string& randomBarcode, const unsigned int n)
 {
     randomBarcode.clear();
     if (n <= 0)
@@ -164,7 +164,7 @@ unsigned int insertErrors(std::string& read, const double er)
     auto it = read.begin();
     while (it != read.end())
     {
-        if ((rand() % 100) < (unsigned int)(er * 100))
+        if ((unsigned int)(rand() % 100) < (unsigned int)(er * 100))
         {
             *it = getRandomBase();
             ++nErrors;
@@ -388,7 +388,7 @@ int main(int argc, char const ** argv)
     }
     std::cout << std::endl;
 
-    int numReads = 0;
+    unsigned int numReads = 0;
     if (isSet(parser, "n"))
         getOptionValue(numReads, parser, "n");
 
@@ -459,7 +459,7 @@ int main(int argc, char const ** argv)
             ++numAdapters;
             // add PCR artifacts
             unsigned int PCRArtifactPercentage = 10;
-            if ((rand() % 100) < PCRArtifactPercentage  && nRead < numReads)
+            if ((unsigned int)(rand() % 100) < PCRArtifactPercentage  && nRead < numReads)
             {
                 writeRecord(rawReads, std::to_string(nRead) + "_PCR_artifact", temp);
                 writeRecord(preprocessedReads, std::to_string(nRead) + "_PCR_artifact", temp2);
