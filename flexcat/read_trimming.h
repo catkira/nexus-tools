@@ -66,7 +66,7 @@ struct Mean {
 // Functions
 // ============================================================================
 
-inline unsigned getQuality(const seqan::String<seqan::Dna5Q>& seq, unsigned i)
+inline unsigned getQuality(const seqan::String<seqan::Dna5Q>& seq, unsigned i) noexcept
 {
 	return seqan::getQualityValue(seq[i]);
 }

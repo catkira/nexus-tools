@@ -436,7 +436,7 @@ void ArgumentParserBuilder::addReadTrimmingOptions(seqan::ArgumentParser & parse
     seqan::ArgParseOption trimOpt = seqan::ArgParseOption(
         "m", "method", "Method for trimming reads.",
         seqan::ArgParseArgument::STRING, "METHOD");
-    setDefaultValue(trimOpt, "WIN");
+    setDefaultValue(trimOpt, "TAIL");
     setValidValues(trimOpt, "WIN BWA TAIL");
     addOption(parser, trimOpt);
 

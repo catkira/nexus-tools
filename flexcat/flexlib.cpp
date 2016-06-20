@@ -901,7 +901,7 @@ int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
             std::string method;
             getOptionValue(method, parser, "m");
             std::cout << "\tMethod: " << method << "\n";
-            if (isSet(parser, "l"))
+            if (isSet(parser, "qml"))
             {
                 std::cout << "\tMinimum length after trimming: " << qualityTrimmingParams.min_length << "\n";
             }
