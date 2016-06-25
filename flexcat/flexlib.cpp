@@ -456,8 +456,11 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         preprocessingStage(processingParams, *reads, stats);
         if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, stats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
-        qualityTrimmingStage(qualityTrimmingParams, *reads, stats);
+        auto temp = qualityTrimmingParams;
+        temp.cutoff = 1;
+        qualityTrimmingStage(temp, *reads, stats);
         adapterTrimmingStage(*reads, tlsBlock);
+        qualityTrimmingStage(qualityTrimmingParams, *reads, stats);
         postprocessingStage(processingParams, *reads, stats);
         stats.processTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
         return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), TStats>>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, stats));
