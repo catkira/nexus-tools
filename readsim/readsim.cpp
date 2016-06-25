@@ -14,6 +14,33 @@ License: LGPL
 
 #include "readsim.h"
 
+void Dna5ToStdString(std::string& dest, const seqan::Dna5QString &source) noexcept
+{
+    auto len = length(source);
+    dest.resize(len);
+    for (size_t n = 0; n < len; n++)
+    {
+        switch (((unsigned char)source[n]) & 0x07)
+        {
+        case 0:
+            dest[n] = 'A';
+            break;
+        case 1:
+            dest[n] = 'C';
+            break;
+        case 2:
+            dest[n] = 'G';
+            break;
+        case 3:
+            dest[n] = 'T';
+            break;
+        case 4:
+            dest[n] = 'N';
+            break;
+        }
+    }
+}
+
 std::string getFilePrefix(const std::string& fileName, const bool withPath = true)
 {
     std::size_t found = fileName.find_last_of(".");
@@ -216,27 +243,40 @@ void assignQualities(seqan::Dna5QString& read, const std::vector<int>& qualities
     }
 }
 
-float Sen(unsigned int TP, unsigned int FN)
+void trimQualities(seqan::Dna5QString& read, const int q)
+{
+    const unsigned int length = seqan::length(read);
+    for (unsigned int i = length-1; i > 0; i--)
+    {
+        if (seqan::getQualityValue(read[i]) >= q)
+        {
+            read = seqan::prefix(read, i+1);
+            return;
+        }
+    }
+}
+
+float Sen(const unsigned int TP, const unsigned int FN)
 {
     return static_cast<float>(TP) / static_cast<float>(TP + FN);
 }
 
-float Spec(unsigned int TN, unsigned int FP)
+float Spec(const unsigned int TN, const unsigned int FP)
 {
     return static_cast<float>(TN) / static_cast<float>(TN + FP);
 }
 
-float PPV(unsigned int TP, unsigned int FP)
+float PPV(const unsigned int TP, const unsigned int FP)
 {
     return static_cast<float>(TP) / static_cast<float>(TP + FP);
 }
 
-float NPV(unsigned int TN, unsigned int FN)
+float NPV(const unsigned int TN, const unsigned int FN)
 {
     return static_cast<float>(TN) / static_cast<float>(TN + FN);
 }
 
-double MCC(unsigned int TN, unsigned int FN, unsigned int TP, unsigned int FP)
+double MCC(const unsigned int TN, const unsigned int FN, const unsigned int TP, const unsigned int FP)
 {
     return ((double)TP*TN - (double)FP*FN) / sqrt((double)(TP + FP)*(double)(TP + FN)*(double)(TN + FP)*(double)(TN + FN));
 }
@@ -502,6 +542,7 @@ int main(int argc, char const ** argv)
                 qualities = doQualities(temp);
                 qualities = decltype(qualities)(qualities.begin() + numRandomBarcode - fixedBarcode.size(), qualities.end());
                 assignQualities(temp2, qualities);
+                trimQualities(temp2, 10);
             }
             writeRecord(rawReads, std::to_string(nRead), temp);
             writeRecord(preprocessedReads, std::to_string(nRead), temp2);
@@ -518,6 +559,7 @@ int main(int argc, char const ** argv)
                     qualities = doQualities(temp);
                     qualities = decltype(qualities)(qualities.begin() + numRandomBarcode - fixedBarcode.size(), qualities.end());
                     assignQualities(temp2, qualities);
+                    trimQualities(temp2, 10);
                 }
                 writeRecord(rawReads, std::to_string(nRead) + "_PCR_artifact", temp);
                 writeRecord(preprocessedReads, std::to_string(nRead) + "_PCR_artifact", temp2);
