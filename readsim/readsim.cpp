@@ -196,7 +196,7 @@ std::vector<int> doQualities(seqan::Dna5QString& read)
             q -= 5;
         else
             q = 0;
-        const float percentCorrect = ((float)(q)/ bestQuality) * 100;
+        const float percentCorrect = sqrt(sqrt((float)(q)/ bestQuality)) * 100;
         if (rand() % 100 > percentCorrect)
         {
             read[pos] = getRandomBase();
