@@ -281,6 +281,13 @@ double MCC(const unsigned int TN, const unsigned int FN, const unsigned int TP, 
     return ((double)TP*TN - (double)FP*FN) / sqrt((double)(TP + FP)*(double)(TP + FN)*(double)(TN + FP)*(double)(TN + FN));
 }
 
+bool isGoodArea(const std::string& bases)
+{
+    if (bases.find_first_of('N') != std::string::npos)
+        return false;
+    return true;
+}
+
 int main(int argc, char const ** argv)
 {
     seqan::ArgumentParser parser = buildParser();
@@ -514,7 +521,11 @@ int main(int argc, char const ** argv)
     unsigned int nGeneratedBases = 0;
     while(nRead<numReads)
     {
-        unsigned int peakPos = rand() % (refGenome.size() - readLength - peakHalfWidthMean*4 + numRandomBarcode + fixedBarcode.size());
+        unsigned int peakPos = 0;
+        do {
+            peakPos = rand() % (refGenome.size() - readLength - peakHalfWidthMean * 4 + numRandomBarcode + fixedBarcode.size());
+        } while (!isGoodArea(refGenome.substr(
+            std::min<unsigned int>(0,peakPos- peakHalfWidthMean * 2), std::min<unsigned int>(refGenome.size(), peakPos + peakHalfWidthMean * 4))));
         peakPos += peakHalfWidthMean*2;
         unsigned int k = 0;
         unsigned int peakNumReads = (unsigned int)peakCoverageDistribution(generator);
