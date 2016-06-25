@@ -841,7 +841,7 @@ unsigned stripAdapter(TSeq& seq, unsigned char qTrimmed, TlsBlock& tlsBlock, con
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap+ std::min<unsigned char>(tlsBlock.params.mode.min_length-1, qTrimmed), alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
+            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 if (alignResult.score > bestAlignResult.score)
                 {
@@ -941,7 +941,7 @@ unsigned stripAdapter(TSeq& seq, const unsigned char qTrimmed, TlsBlock& tlsBloc
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap + qTrimmed, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
+            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 TReadLen eraseStart = 0;
                 TReadLen eraseEnd = 0;

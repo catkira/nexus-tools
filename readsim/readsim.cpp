@@ -519,11 +519,12 @@ int main(int argc, char const ** argv)
     unsigned int nRead = 0;
     unsigned int nErrors = 0;
     unsigned int nGeneratedBases = 0;
+    std::uniform_int_distribution<unsigned int> peakPosDistribution(0, refGenome.size() - readLength - peakHalfWidthMean * 4 + numRandomBarcode + fixedBarcode.size());
     while(nRead<numReads)
     {
         unsigned int peakPos = 0;
         do {
-            peakPos = rand() % (refGenome.size() - readLength - peakHalfWidthMean * 4 + numRandomBarcode + fixedBarcode.size());
+            peakPos = peakPosDistribution(generator);
         } while (!isGoodArea(refGenome.substr(
             std::min<unsigned int>(0,peakPos- peakHalfWidthMean * 2), std::min<unsigned int>(refGenome.size(), peakPos + peakHalfWidthMean * 4))));
         peakPos += peakHalfWidthMean*2;
