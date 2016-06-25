@@ -101,6 +101,10 @@ seqan::ArgumentParser buildParser(void)
         seqan::ArgParseOption::STRING, "STRING");
     addOption(parser, preFileOpt);
 
+    seqan::ArgParseOption qualityOpt = seqan::ArgParseOption(
+        "q", "quality", "Simulate quality detoriation");
+    addOption(parser, qualityOpt);
+
     return parser;
 }
 
@@ -172,6 +176,44 @@ unsigned int insertErrors(std::string& read, const double er)
         ++it;
     }
     return nErrors;
+}
+
+std::vector<int> doQualities(seqan::Dna5QString& read)
+{
+    std::random_device rd;
+    std::default_random_engine generator(rd());
+    const unsigned int maxStartPos = length(read);
+    const unsigned int minStartPos = maxStartPos / 2;
+    std::uniform_int_distribution<unsigned int> distribution(minStartPos, maxStartPos);
+    unsigned int startPos = distribution(generator);
+    const int bestQuality = 40;
+    unsigned char q = bestQuality;
+    std::vector<int> qualities;
+    qualities.assign(maxStartPos, bestQuality);
+    for (auto pos = startPos; pos < maxStartPos; pos++)
+    {
+        if (q >= 5)
+            q -= 5;
+        else
+            q = 0;
+        const float percentCorrect = ((float)(q)/ bestQuality) * 100;
+        if (rand() % 100 > percentCorrect)
+        {
+            read[pos] = getRandomBase();
+        }
+        qualities[pos] = q;
+        seqan::assignQualityValue(read[pos], (int)q);
+    }
+    return qualities;
+}
+
+void assignQualities(seqan::Dna5QString& read, const std::vector<int>& qualities)
+{
+    const auto length = seqan::length(read);
+    for (auto i = 0; i < length; i++)
+    {
+        seqan::assignQualityValue(read[i], qualities[i]);
+    }
 }
 
 float Sen(unsigned int TP, unsigned int FN)
@@ -392,6 +434,8 @@ int main(int argc, char const ** argv)
     if (isSet(parser, "n"))
         getOptionValue(numReads, parser, "n");
 
+    const bool runQualities = isSet(parser, "q");
+
     std::string fixedBarcode;
     getOptionValue(fixedBarcode, parser, "fb");
     boost::to_upper(fixedBarcode);
@@ -451,8 +495,15 @@ int main(int argc, char const ** argv)
             nErrors += insertErrors(read, er);
 
             seqan::Dna5QString temp = read;
-            writeRecord(rawReads, std::to_string(nRead), temp);
             seqan::Dna5QString temp2 = refGenome.substr(pos, readLength - numRandomBarcode - fixedBarcode.size() - adapterLength);
+            std::vector<int> qualities;
+            if (runQualities)
+            {
+                qualities = doQualities(temp);
+                qualities = decltype(qualities)(qualities.begin() + numRandomBarcode - fixedBarcode.size(), qualities.end());
+                assignQualities(temp2, qualities);
+            }
+            writeRecord(rawReads, std::to_string(nRead), temp);
             writeRecord(preprocessedReads, std::to_string(nRead), temp2);
             nGeneratedBases += read.size();
             ++nRead;
@@ -461,6 +512,13 @@ int main(int argc, char const ** argv)
             unsigned int PCRArtifactPercentage = 10;
             if ((unsigned int)(rand() % 100) < PCRArtifactPercentage  && nRead < numReads)
             {
+                temp = read;
+                if (runQualities)
+                {
+                    qualities = doQualities(temp);
+                    qualities = decltype(qualities)(qualities.begin() + numRandomBarcode - fixedBarcode.size(), qualities.end());
+                    assignQualities(temp2, qualities);
+                }
                 writeRecord(rawReads, std::to_string(nRead) + "_PCR_artifact", temp);
                 writeRecord(preprocessedReads, std::to_string(nRead) + "_PCR_artifact", temp2);
                 nGeneratedBases += read.size();

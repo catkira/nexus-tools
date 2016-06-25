@@ -155,7 +155,7 @@ unsigned _trimReads(std::vector<TRead>& reads, unsigned const cutoff, const TSpe
         {
             ++trimmedReads;
             if (TTagTrimming::value)
-                append(read.id, "[Trimmed]");
+                append(read.id, ":QT");
         }
         return read;
     });
