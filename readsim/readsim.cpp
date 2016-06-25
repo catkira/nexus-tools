@@ -209,8 +209,8 @@ std::vector<int> doQualities(seqan::Dna5QString& read)
 
 void assignQualities(seqan::Dna5QString& read, const std::vector<int>& qualities)
 {
-    const auto length = seqan::length(read);
-    for (auto i = 0; i < length; i++)
+    const unsigned int length = seqan::length(read);
+    for (unsigned int i = 0; i < length; i++)
     {
         seqan::assignQualityValue(read[i], qualities[i]);
     }
