@@ -802,11 +802,11 @@ unsigned stripAdapter(TSeq& seq, AdapterTrimmingStats<TReadLen>& stats, TAdapter
     params.adapters = adapters;
     params.mode = spec;
     TlsBlockAdapterTrimming<AdapterTrimmingStats<TReadLen>> tlsBlock(stats, params);
-    return stripAdapter(seq, tlsBlock, stripDirection, AdapterSelectionMethod::Best(), ErrorRateMode::linear());
+    return stripAdapter(seq, 0, tlsBlock, stripDirection, AdapterSelectionMethod::Best(), ErrorRateMode::linear());
 }
 
 template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock, typename TErrorRateMode>
-unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::Best&, const TErrorRateMode&)
+unsigned stripAdapter(TSeq& seq, unsigned char qTrimmed, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::Best&, const TErrorRateMode&)
 {
     AlignAlgorithm::Menkuec alignAlgorithm;
 
@@ -841,7 +841,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
+            if (isMatch(alignResult.overlap + qTrimmed, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 if (alignResult.score > bestAlignResult.score)
                 {
@@ -908,7 +908,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
 
 
 template <typename TSeq, typename TStripAdapterDirection, typename TlsBlock, typename TErrorRateMode>
-unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::TopDown&, const TErrorRateMode&)
+unsigned stripAdapter(TSeq& seq, const unsigned char qTrimmed, TlsBlock& tlsBlock, const TStripAdapterDirection&, const AdapterSelectionMethod::TopDown&, const TErrorRateMode&)
 {
     AlignAlgorithm::Menkuec alignAlgorithm;
 
@@ -941,7 +941,7 @@ unsigned stripAdapter(TSeq& seq, TlsBlock& tlsBlock, const TStripAdapterDirectio
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
+            if (isMatch(alignResult.overlap + qTrimmed, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 TReadLen eraseStart = 0;
                 TReadLen eraseEnd = 0;
@@ -1002,7 +1002,7 @@ template < template <typename> class TRead, typename TSeq, typename TlsBlock, ty
     {
         if (seqan::empty(read.seq))
             continue;
-        const unsigned over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod(), TErrorRateMode());
+        const unsigned over = stripAdapter(read.seq, read.qTrimmed, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod(), TErrorRateMode());
         if (TTagAdapter::value && over != 0)
             insertAfterFirstToken(read.id, ":AdapterRemoved");
     }
@@ -1026,9 +1026,9 @@ template < template <typename> class TRead, typename TSeq, typename TlsBlock, ty
         }
         else
         {
-            over = stripAdapter(read.seq, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod(), TErrorRateMode());
+            over = stripAdapter(read.seq, read.qTrimmed, tlsBlock, StripAdapterDirection<adapterDirection::forward>(), TAdapterSelectionMethod(), TErrorRateMode());
             if (!seqan::empty(read.seqRev))
-                over += stripAdapter(read.seqRev, tlsBlock, StripAdapterDirection<adapterDirection::reverse>(), TAdapterSelectionMethod(), TErrorRateMode());
+                over += stripAdapter(read.seqRev, read.qTrimmed, tlsBlock, StripAdapterDirection<adapterDirection::reverse>(), TAdapterSelectionMethod(), TErrorRateMode());
         }
         if (TTagAdapter::value && over != 0)
             insertAfterFirstToken(read.id, ":AdapterRemoved");
