@@ -87,6 +87,19 @@ namespace seqan {
 
 using TAdapterSequence = std::string;
 
+
+std::array<float, 41> initQualityErrorProbabilities()
+{
+    std::array<float, 41> qualityErrorProbabilies;
+    for (unsigned int i = 0; i <= 40; ++i)
+    {
+        qualityErrorProbabilies[i] = pow(10,-static_cast<float>(i)/10)/(float)3;
+    }
+    return qualityErrorProbabilies;
+}
+
+static const std::array<float,41> qualityErrorProbabilies = initQualityErrorProbabilities();
+
 struct AdapterItem;
 typedef std::vector< AdapterItem > AdapterSet;
 
@@ -693,16 +706,17 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TQual& qual, const TAd
             else if (*readIterator == *adapterIterator)
                 ++matches;
             else
-                qExtra += pow(10,-(static_cast<float>(*qualityIterator)/(float)10))/3;
+                qExtra += qualityErrorProbabilies[*qualityIterator];
             ++readIterator;
             ++qualityIterator;
             ++adapterIterator;
             --remaining;
         }
-        const float errorRate = static_cast<float>(overlap - matches - ambiguous - (unsigned char)qExtra) / static_cast<float>(overlap);
+        matches += (unsigned char)qExtra;
+        const float errorRate = static_cast<float>(overlap - matches - ambiguous) / static_cast<float>(overlap);
         if (errorRate < ret.errorRate || (errorRate == ret.errorRate && overlap > ret.overlap))
         {
-            ret.matches = matches +(unsigned char)qExtra;
+            ret.matches = matches;
             ret.ambiguous = ambiguous;
             ret.errorRate = errorRate;
             ret.shiftPos = shiftPos;
