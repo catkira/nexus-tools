@@ -552,7 +552,7 @@ int main(int argc, char const ** argv)
             if (runQualities)
             {
                 qualities = doQualities(temp);
-                qualities = decltype(qualities)(qualities.begin() + numRandomBarcode - fixedBarcode.size(), qualities.end());
+                qualities = decltype(qualities)(qualities.begin() + numRandomBarcode + fixedBarcode.size(), qualities.end());
                 assignQualities(temp2, qualities);
                 trimQualities(temp2, 10);
             }
@@ -569,7 +569,7 @@ int main(int argc, char const ** argv)
                 if (runQualities)
                 {
                     qualities = doQualities(temp);
-                    qualities = decltype(qualities)(qualities.begin() + numRandomBarcode - fixedBarcode.size(), qualities.end());
+                    qualities = decltype(qualities)(qualities.begin() + numRandomBarcode + fixedBarcode.size(), qualities.end());
                     assignQualities(temp2, qualities);
                     trimQualities(temp2, 10);
                 }
