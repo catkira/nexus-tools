@@ -88,10 +88,10 @@ namespace seqan {
 using TAdapterSequence = std::string;
 
 
-std::array<float, 41> initQualityErrorProbabilities()
+auto initQualityErrorProbabilities()
 {
     std::array<float, 41> qualityErrorProbabilies;
-    for (unsigned int i = 0; i <= 40; ++i)
+    for (unsigned int i = 0; i < qualityErrorProbabilies.size(); ++i)
     {
         qualityErrorProbabilies[i] = pow(10,-static_cast<float>(i)/10)/(float)3;
     }
@@ -668,7 +668,6 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TQual& qual, const TAd
     std::string::const_iterator readIterator = readBeginIterator;
     std::string::const_iterator adapterIterator = adapterBeginIterator;
     std::string::const_iterator qualityIterator = qualityBeginIterator;
-    float qExtra = 0;
 
     while (shiftPos <= shiftEndPos)
     {
@@ -679,7 +678,7 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TQual& qual, const TAd
         unsigned int matches = 0;
         unsigned int ambiguous = 0;
         unsigned int remaining = overlap;
-        qExtra = 0;
+        float qExtra = 0;
         readIterator = readBeginIterator + overlapStart;
         qualityIterator = qualityBeginIterator + overlapStart;
         adapterIterator = adapterBeginIterator + std::min(0, shiftPos)*(-1);
