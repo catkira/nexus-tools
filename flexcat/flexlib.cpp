@@ -540,8 +540,11 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
 // ----------------------------------------------------------------------------
 // Program entry point.
 
+
 int flexcatMain(const FlexiProgram flexiProgram, int argc, char const ** argv)
 {
+    initQualityErrorProbabilities();
+
     auto t1 = std::chrono::steady_clock::now();
     seqan::ArgumentParser parser = initParser(flexiProgram);
 
