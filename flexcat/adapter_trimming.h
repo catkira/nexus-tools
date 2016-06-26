@@ -711,7 +711,7 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TQual& qual, const TAd
             ++adapterIterator;
             --remaining;
         }
-        matches += (unsigned char)qExtra;
+        ambiguous += (unsigned char)qExtra;
         const float errorRate = static_cast<float>(overlap - matches - ambiguous) / static_cast<float>(overlap);
         if (errorRate < ret.errorRate || (errorRate == ret.errorRate && overlap > ret.overlap))
         {
