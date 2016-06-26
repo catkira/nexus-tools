@@ -834,14 +834,15 @@ unsigned stripAdapter(TSeq& seq, unsigned char qTrimmed, TlsBlock& tlsBlock, con
             const auto& adapterSequence = adapterItem.getSeq();
             const auto lenAdapter = adapterItem.getLen();
 
+            const unsigned char qTrimmedExtra = std::min<unsigned char>(tlsBlock.params.mode.min_length - 1, qTrimmed);
             const int oppositeEndOverhang = adapterItem.anchored == true ? lenAdapter - lenSeq : adapterItem.overhang;
-            const int sameEndOverhang = adapterItem.anchored == true ? 0 : lenAdapter - tlsBlock.params.mode.min_length;
+            const int sameEndOverhang = adapterItem.anchored == true ? 0 + qTrimmed: lenAdapter - tlsBlock.params.mode.min_length + qTrimmedExtra;
             if (adapterItem.adapterEnd == AdapterItem::end3)
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, oppositeEndOverhang, sameEndOverhang, alignAlgorithm);
             else
                 alignPair(alignResult, tlsBlock.tlsString, adapterSequence, sameEndOverhang, oppositeEndOverhang, alignAlgorithm);
 
-            if (isMatch(alignResult.overlap, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
+            if (isMatch(alignResult.overlap + qTrimmedExtra, alignResult.mismatches, tlsBlock.params.mode, TErrorRateMode()))
             {
                 if (alignResult.score > bestAlignResult.score)
                 {
