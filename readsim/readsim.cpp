@@ -219,8 +219,10 @@ std::vector<int> doQualities(seqan::Dna5QString& read)
     qualities.assign(maxStartPos, bestQuality);
     for (auto pos = startPos; pos < maxStartPos; pos++)
     {
-        if (q >= 5)
+        if (q > 5)
             q -= 5;
+        else if (q >= 2)
+            q -= 2;
         else
             q = 0;
         const float percentCorrect = ((float)1 - (float)pow(10,-(float)q/(float)10)) * 100;
