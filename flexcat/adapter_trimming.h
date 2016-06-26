@@ -93,7 +93,7 @@ auto initQualityErrorProbabilities()
     std::array<float, 41> qualityErrorProbabilies;
     for (unsigned int i = 0; i < qualityErrorProbabilies.size(); ++i)
     {
-        qualityErrorProbabilies[i] = pow(10,-static_cast<float>(i)/10)/(float)3;
+        qualityErrorProbabilies[i] = pow(10,-static_cast<float>(i)/10);
     }
     return qualityErrorProbabilies;
 }

@@ -456,9 +456,6 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         preprocessingStage(processingParams, *reads, stats);
         if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, stats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
-        auto temp = qualityTrimmingParams;
-        temp.cutoff = 1;
-//        qualityTrimmingStage(temp, *reads, stats);
         adapterTrimmingStage(*reads, tlsBlock);
         qualityTrimmingStage(qualityTrimmingParams, *reads, stats);
         postprocessingStage(processingParams, *reads, stats);
