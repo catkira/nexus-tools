@@ -132,6 +132,10 @@ seqan::ArgumentParser buildParser(void)
         "q", "quality", "Simulate quality detoriation");
     addOption(parser, qualityOpt);
 
+    seqan::ArgParseOption pcrOpt = seqan::ArgParseOption(
+        "p", "PCR artifacts", "Simulate PCR artifacts");
+    addOption(parser, pcrOpt);
+
     return parser;
 }
 
@@ -298,6 +302,8 @@ int main(int argc, char const ** argv)
     // Check if input was successfully parsed.
     if (res != seqan::ArgumentParser::PARSE_OK)
         return res == seqan::ArgumentParser::PARSE_ERROR;
+
+    const bool pcr_artifacts = isSet(parser, "fp");
 
     if (isSet(parser, "fp") && isSet(parser, "fr")) {
         std::cout << "comparing files...\n";
@@ -565,7 +571,7 @@ int main(int argc, char const ** argv)
             ++numAdapters;
             // add PCR artifacts
             unsigned int PCRArtifactPercentage = 10;
-            if ((unsigned int)(rand() % 100) < PCRArtifactPercentage  && nRead < numReads)
+            if (pcr_artifacts && (unsigned int)(rand() % 100) < PCRArtifactPercentage  && nRead < numReads)
             {
                 temp = read;
                 if (runQualities)

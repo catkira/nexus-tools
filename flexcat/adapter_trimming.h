@@ -683,21 +683,6 @@ void alignPair(TAlignResult& ret, const TSeq& read, const TQual& qual, const TAd
         qualityIterator = qualityBeginIterator + overlapStart;
         adapterIterator = adapterBeginIterator + std::min(0, shiftPos)*(-1);
 
-        //while (remaining >= 32)
-        //{
-        //    compareAdapter<32>::apply(readIterator, adapterIterator, matches, ambiguous);
-        //    remaining -= 32;
-        //}
-        //if (remaining >= 16)
-        //{
-        //    compareAdapter<16>::apply(readIterator, adapterIterator, matches, ambiguous);
-        //    remaining -= 16;
-        //}
-        //if (remaining >= 8)
-        //{
-        //    compareAdapter<8>::apply(readIterator, adapterIterator, matches, ambiguous);
-        //    remaining -= 8;
-        //}
         while (remaining > 0)
         {
             if (*readIterator == 'N' || *adapterIterator == 'N')
