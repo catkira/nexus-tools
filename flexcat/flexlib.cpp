@@ -138,9 +138,9 @@ void adapterTrimmingStage(std::vector<TRead>& reads, TlsBlock& tlsBlock)
     if(tlsBlock.params.tag)
         if(tlsBlock.params.best)
             if(tlsBlock.params.nler)
-                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::BestQ(), ErrorRateMode::nonLinear());
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::Best(), ErrorRateMode::nonLinear());
             else
-                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::BestQ(), ErrorRateMode::linear());
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::Best(), ErrorRateMode::linear());
         else
             if (tlsBlock.params.nler)
                 stripAdapterBatch(reads, tlsBlock, TagAdapter<true>(), AdapterSelectionMethod::TopDown(), ErrorRateMode::nonLinear());
@@ -149,9 +149,9 @@ void adapterTrimmingStage(std::vector<TRead>& reads, TlsBlock& tlsBlock)
     else
         if (tlsBlock.params.best)
             if (tlsBlock.params.nler)
-                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::BestQ(), ErrorRateMode::nonLinear());
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::Best(), ErrorRateMode::nonLinear());
             else
-                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::BestQ(), ErrorRateMode::linear());
+                stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::Best(), ErrorRateMode::linear());
         else
             if (tlsBlock.params.nler)
                 stripAdapterBatch(reads, tlsBlock, TagAdapter<false>(), AdapterSelectionMethod::TopDown(), ErrorRateMode::nonLinear());
@@ -456,8 +456,8 @@ int mainLoop(TRead<TSeq>, const ProgramParams& programParams, InputFileStreams& 
         preprocessingStage(processingParams, *reads, stats);
         if (demultiplexingStage(demultiplexingParams, *reads, esaFinder, stats) != 0)
             std::cerr << "DemultiplexingStage error" << std::endl;
-        adapterTrimmingStage(*reads, tlsBlock);
         qualityTrimmingStage(qualityTrimmingParams, *reads, stats);
+        adapterTrimmingStage(*reads, tlsBlock);
         postprocessingStage(processingParams, *reads, stats);
         stats.processTime = std::chrono::duration_cast<std::chrono::duration<float>>(std::chrono::steady_clock::now() - t1).count();
         return std::make_unique<std::tuple<decltype(reads), decltype(demultiplexingParams.barcodeIds), TStats>>(std::make_tuple(std::move(reads), demultiplexingParams.barcodeIds, stats));
