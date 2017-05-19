@@ -76,7 +76,7 @@ bool is_avx2_supported(void)
     const int bit_AVX2 = 0x10;
     return ebx & bit_AVX2 ? true : false;
 }
-#elif
+#else
 #include <cpuid.h>
 
 bool is_avx2_supported(void)
