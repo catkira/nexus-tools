@@ -3,7 +3,7 @@ rm -rf nexus-tools_build
 mkdir nexus-tools_build
 cd nexus-tools_build
 export CXX=/usr/bin/g++-5
-cmake -DLINUX_STATIC:BOOL=OFF -DCMAKE_BUILD_TYPE=Release ../nexus-tools
+cmake -DLINUX_STATIC:BOOL=OFF -DCMAKE_BUILD_TYPE=Release -DAVX2 ../nexus-tools
 make flexcat
 make nexcat
 make MappingAnalyzer
