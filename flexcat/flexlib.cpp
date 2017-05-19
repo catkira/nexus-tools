@@ -66,6 +66,17 @@
 #include "read_writer.h"
 #include "ptc.h"
 
+
+#ifdef _MSC_VER
+bool is_avx2_supported(void)
+{
+    int cpuInfo[4];
+    __cpuid(cpuInfo, 7);
+    const int ebx = cpuInfo[1];
+    const int bit_AVX2 = 0x10;
+    return ebx & bit_AVX2 ? true : false;
+}
+#elif
 #include <cpuid.h>
 
 bool is_avx2_supported(void)
@@ -74,6 +85,7 @@ bool is_avx2_supported(void)
     __get_cpuid(7, &eax, &ebx, &ecx, &edx);
     return ebx & bit_AVX2 ? true : false;
 }
+#endif
 
 
 using namespace seqan;
