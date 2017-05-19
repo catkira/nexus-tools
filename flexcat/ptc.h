@@ -409,7 +409,7 @@ namespace ptc
         using reuse_item_type = std::remove_reference_t<typename first_argument<std::remove_reference_t<TSource>>::type>;  // why remove_reference here?
     private:
         TSource& _source;
-        ContainerSelector<typename reuse_item_type::element_type, InputPolicy::single, OutputPolicy::single, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
+        ContainerSelector<typename reuse_item_type::element_type, InputPolicy::multi, OutputPolicy::single, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
     protected:
         ProduceReuseInterface(TSource& _source) : _source(_source), _usedItems(10) {};
 
@@ -531,7 +531,7 @@ namespace ptc
         SinkReuseInterface(TSink&& sink) : _sink(sink), _usedItems(10) {};
         using used_item_type = std::result_of_t<TSink(TCoreItemType)>;
 
-        ContainerSelector<typename used_item_type::element_type, InputPolicy::single, OutputPolicy::single, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
+        ContainerSelector<typename used_item_type::element_type, InputPolicy::single, OutputPolicy::multi, WaitPolicy::Semaphore, OrderPolicy::Unordered> _usedItems;
         void sink(TCoreItemType&& arg)
         {
             auto temp = _sink(std::move(arg));
@@ -584,8 +584,8 @@ namespace ptc
         std::atomic_bool _run;
     // function declarations and definitions
     public:
-        Consume(TSink&& sink, const unsigned int numSlots)
-            : OrderManager<TOrderPolicy>(numSlots), SinkReuseInterface<TSink, TCoreItemType, reuseItems>(sink), _slots(numSlots), _numSlots(numSlots), _run(false)
+        Consume(TSink sink, const unsigned int numSlots)
+            : OrderManager<TOrderPolicy>(numSlots), SinkReuseInterface<TSink, TCoreItemType, reuseItems>(std::forward<TSink>(sink)), _slots(numSlots), _numSlots(numSlots), _run(false)
         {}
         ~Consume()
         {
@@ -735,7 +735,7 @@ namespace ptc
     template <typename TSource, typename TTransformer, typename TSink>
     auto ordered_ptc(TSource&& source, const TTransformer& transformer, TSink&& sink, const unsigned int numThreads)
     {
-        return std::make_unique<PTC_unit<TSource, TTransformer, TSink, OrderPolicy::Ordered, WaitPolicy::Semaphore>>
+        return std::make_unique<PTC_unit<TSource, TTransformer, TSink&&, OrderPolicy::Ordered, WaitPolicy::Semaphore>>
             (std::forward<TSource>(source), transformer, std::forward<TSink>(sink), numThreads);
     }
 
